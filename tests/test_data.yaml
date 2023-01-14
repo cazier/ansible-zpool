@@ -1,22 +1,26 @@
 test_zpool:
   - name: striped storage pool
-    input: |
+    console: |
       test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
       	/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
       	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/03.raw	9.08T	137K	9.08T	-	-	0%	0.00%	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: stripe
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
+
+    create: >-
+      test
+      /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
 
   - name: raidz1 storage pools
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	100K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -27,30 +31,35 @@ test_zpool:
       	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
 
   - name: striped/mirrored/raidz(1,2,3) storage pools
-    input: |
+    console: |
       test	99.9T
       	/tmp/01.raw	9.08T	31K	9.08T	-	-	0%	0.00%	-	ONLINE
       	raidz1-1	18.2T	75K	18.2T	-	-	0%	0.00%	-	ONLINE
       	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
       	raidz2-2	27.2T	93K	27.2T	-	-	0%	0.00%	-	ONLINE
-      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/subtemp/04.raw	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
       	raidz3-3	36.3T	82K	36.3T	-	-	0%	0.00%	-	ONLINE
@@ -65,41 +74,49 @@ test_zpool:
       	/tmp/14.raw	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/15.raw	-	-	-	-	-	-	-	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: stripe
           disks:
-            - 01.raw
+            - /tmp/01.raw
 
         - type: raidz1
           disks:
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz2
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/subtemp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
         - type: raidz3
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
-            - 10.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+            - /tmp/10.raw
 
         - type: mirror
           disks:
-            - 11.raw
-            - 12.raw
-            - 13.raw
-            - 14.raw
-            - 15.raw
+            - /tmp/11.raw
+            - /tmp/12.raw
+            - /tmp/13.raw
+            - /tmp/14.raw
+            - /tmp/15.raw
+
+    create: >-
+      test
+      /tmp/01.raw
+      raidz1 scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz2 /tmp/subtemp/04.raw /tmp/05.raw /tmp/06.raw
+      raidz3 /tmp/07.raw /tmp/08.raw /tmp/09.raw /tmp/10.raw
+      mirror /tmp/11.raw /tmp/12.raw /tmp/13.raw /tmp/14.raw /tmp/15.raw
 
   - name: striped log pools (w/ storage)
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	171K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -114,30 +131,37 @@ test_zpool:
       	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       logs:
         - type: stripe
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      log
+      /tmp/07.raw /tmp/08.raw /tmp/09.raw
 
   - name: mirrored log pools (w/ storage)
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	171K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -153,30 +177,37 @@ test_zpool:
       	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       logs:
         - type: mirror
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      log
+      mirror /tmp/07.raw /tmp/08.raw /tmp/09.raw
 
   - name: striped/mirrored log pools (w/ storage)
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	173K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -195,36 +226,44 @@ test_zpool:
       	/tmp/11.raw	-	-	-	-	-	-	-	-	ONLINE
       	/tmp/12.raw	-	-	-	-	-	-	-	-	ONLINE
 
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       logs:
         - type: stripe
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
 
         - type: mirror
           disks:
-            - 10.raw
-            - 11.raw
-            - 12.raw
+            - /tmp/10.raw
+            - /tmp/11.raw
+            - /tmp/12.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      log
+      /tmp/07.raw /tmp/08.raw /tmp/09.raw
+      mirror /tmp/10.raw /tmp/11.raw /tmp/12.raw
 
   - name: spare disk pools (w/ storage)
-    input: |
+    console: |
       test	27.2T
       	raidz1-0	27.2T	241K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -234,23 +273,29 @@ test_zpool:
       	/tmp/04.raw	-	-	-	-	-	-	-	-	AVAIL
       	/tmp/05.raw	-	-	-	-	-	-	-	-	AVAIL
       	/tmp/06.raw	-	-	-	-	-	-	-	-	AVAIL
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
       spare:
         - disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      spare
+      /tmp/04.raw /tmp/05.raw /tmp/06.raw
 
   - name: spare disk pools (w/ storage/logs)
-    input: |
+    console: |
       test	27.2T
       	raidz1-0	27.2T	253K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -265,30 +310,38 @@ test_zpool:
       	/tmp/07.raw	-	-	-	-	-	-	-	-	AVAIL
       	/tmp/08.raw	-	-	-	-	-	-	-	-	AVAIL
       	/tmp/09.raw	-	-	-	-	-	-	-	-	AVAIL
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
       logs:
         - type: mirror
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       spare:
         - disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      log
+      mirror /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      spare
+      /tmp/07.raw /tmp/08.raw /tmp/09.raw
 
   - name: cache pools (w/ storage)
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	130K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -302,29 +355,36 @@ test_zpool:
       	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       cache:
         - disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      cache
+      /tmp/07.raw /tmp/08.raw /tmp/09.raw
 
   - name: cache pools (w/ storage/logs)
-    input: |
+    console: |
       test	54.5T
       	raidz1-0	27.2T	176K	27.2T	-	-	0%	0.00%	-	ONLINE
       	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
@@ -342,35 +402,44 @@ test_zpool:
       	/tmp/10.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/11.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
       	/tmp/12.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
-    expected:
+    list:
       name: test
       storage:
         - type: raidz1
           disks:
-            - 01.raw
+            - /tmp/01.raw
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz1
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
       logs:
         - type: stripe
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
       cache:
         - disks:
-            - 10.raw
-            - 11.raw
-            - 12.raw
+            - /tmp/10.raw
+            - /tmp/11.raw
+            - /tmp/12.raw
+
+    create: >-
+      test
+      raidz1 /tmp/01.raw scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz1 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      log
+      /tmp/07.raw /tmp/08.raw /tmp/09.raw
+      cache
+      /tmp/10.raw /tmp/11.raw /tmp/12.raw
 
   - name: everything
-    input: |
+    console: |
       test	99.9T
       	/tmp/01.raw	9.08T	34K	9.08T	-	-	0%	0.00%	-	ONLINE
       	raidz1-1	18.2T	96K	18.2T	-	-	0%	0.00%	-	ONLINE
@@ -402,55 +471,68 @@ test_zpool:
       spare                               -      -      -        -         -      -      -      -  -
       	/tmp/21.raw	-	-	-	-	-	-	-	-	AVAIL
 
-    expected:
+    list:
       name: test
       storage:
         - type: stripe
           disks:
-            - 01.raw
+            - /tmp/01.raw
 
         - type: raidz1
           disks:
             - scsi-SATA_SN9300G_SERIAL
-            - 03.raw
+            - /tmp/03.raw
 
         - type: raidz2
           disks:
-            - 04.raw
-            - 05.raw
-            - 06.raw
+            - /tmp/04.raw
+            - /tmp/05.raw
+            - /tmp/06.raw
 
         - type: raidz3
           disks:
-            - 07.raw
-            - 08.raw
-            - 09.raw
-            - 10.raw
+            - /tmp/07.raw
+            - /tmp/08.raw
+            - /tmp/09.raw
+            - /tmp/10.raw
 
         - type: mirror
           disks:
-            - 11.raw
-            - 12.raw
-            - 13.raw
-            - 14.raw
-            - 15.raw
+            - /tmp/11.raw
+            - /tmp/12.raw
+            - /tmp/13.raw
+            - /tmp/14.raw
+            - /tmp/15.raw
       logs:
         - type: stripe
           disks:
-            - 16.raw
-            - 17.raw
+            - /tmp/16.raw
+            - /tmp/17.raw
 
         - type: mirror
           disks:
-            - 18.raw
-            - 19.raw
+            - /tmp/18.raw
+            - /tmp/19.raw
 
       cache:
         - disks:
-            - 20.raw
+            - /tmp/20.raw
 
       spare:
         - disks:
-            - 21.raw
+            - /tmp/21.raw
 
-# CMD: zpool list -vPH -o name,size <POOL>
+    create: >-
+      test
+      /tmp/01.raw
+      raidz1 scsi-SATA_SN9300G_SERIAL /tmp/03.raw
+      raidz2 /tmp/04.raw /tmp/05.raw /tmp/06.raw
+      raidz3 /tmp/07.raw /tmp/08.raw /tmp/09.raw /tmp/10.raw
+      mirror /tmp/11.raw /tmp/12.raw /tmp/13.raw /tmp/14.raw /tmp/15.raw
+      log
+      /tmp/16.raw /tmp/17.raw
+      mirror /tmp/18.raw /tmp/19.raw
+      cache
+      /tmp/20.raw
+      spare
+      /tmp/21.raw

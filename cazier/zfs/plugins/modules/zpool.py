@@ -4,10 +4,10 @@ import itertools
 import collections
 
 Storage = dict[str, list[str] | str]
-ZType = dict[str, Storage]
+ZType = dict[str, str | list[Storage]]
 
 
-def get_zpool_data(console: str) -> ZType:
+def console_to_ztype(console: str) -> ZType:
     def pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
         """Recipe to get overlapping pairs of items from an iterable: (ABCD) -> AB, BC, CD
 
@@ -20,24 +20,29 @@ def get_zpool_data(console: str) -> ZType:
         for first, second in zip(*[iter(iterable)] * 2, strict=True):
             yield first, second
 
-    def _match(line: str, pattern: str) -> tuple[t.Optional[str], ...]:
+    def _match(line: str, pattern: str, flags: int = 0) -> tuple[t.Optional[str], ...]:
         """Helper function to try to match a pattern, or return ``None`` if no match is found
 
         Args:
             line (str): input string
             pattern (str): regular expression pattern
+            flags (int): regex flags
 
         Returns:
             t.Optional[str]: the matched string content, or None, if no match was found
         """
-        if _match := re.match(pattern, line):
-            return _match.groups()
+        if match := re.match(pattern, line, flags=flags):
+            return match.groups()
 
         return (None,)
 
     def _get_disk(line: str) -> t.Optional[str]:
         """Attempts to match a zpool list line for a drive/disk. This looks for an indentation along
         with a leading `/` (slash).
+
+        If the result is a disk (found beneath /dev/disk/by-*), the result will be just the disk
+        name (i.e., scsi-SATA_SN9300G_SERIAL). If the result is a raw/sparse image, the full path
+        is returned (i.e., /tmp/subfolder/sparse.raw)
 
         Args:
             line (str): zpool list line
@@ -49,10 +54,30 @@ def get_zpool_data(console: str) -> ZType:
         Returns:
             t.Optional[str]: The final component of the disk name
         """
-        disk, *part = _match(line, r"\t(?:\/.+)+\/(.*?)(?:-part(\d+)|)\t[\d-]")
+        match = _match(
+            line,
+            r"""^                         # Start of the line
+                \t                        # Leading tab (indentation)
+                (\/)                      # Capture only strings starting with a slash
+                (?:dev\/disk\/by-\w+\/)?  # Optional /dev/disk (ignoring /by-*/)
+                (.*?)                     # Capture for disk or raw image name
+                (?:-part(\d+)|)           # Capture a partition number, if it exists. Otherwise ""
+                \t                        # Tab signifying the end of the name
+                [\d-]                     # Disk usage numbers
+                """,
+            flags=re.VERBOSE,
+        )
 
-        if part and part != [None] and int(t.cast(str, part[0])) != 1:
+        if not match[0]:
+            return None
+
+        prefix, disk, part = match
+
+        if part and int(part) != 1:
             raise TypeError("Only using whole disk (or sparse images) is supported at this time.")
+
+        if not part:
+            disk = f"{prefix}{disk}"
 
         return disk
 
@@ -109,4 +134,37 @@ def get_zpool_data(console: str) -> ZType:
 
                     storage.clear()
 
-    return dict(zpool)  # type: ignore[arg-type]
+    return dict(zpool)
+
+
+def ztype_to_create(zpool: ZType) -> list[str]:
+    """Convert a set of input data to a list containing the variables for the `zpool create`
+    command.
+
+    Args:
+        zpool (ZType): input data
+
+    Returns:
+        list[str]: creation command line arguments
+    """
+    # TODO: There are a lot of t.casts in here...
+    def append(vdev: str, pool: Storage) -> None:
+        if vdev in ("storage", "logs"):
+            if (_type := pool.get("type", "stripe")) != "stripe":
+                cmd.append(t.cast(str, _type))
+
+        cmd.extend(t.cast(list[str], pool["disks"]))
+
+    cmd = [t.cast(str, zpool["name"])]
+
+    for pool in zpool["storage"]:
+        append("storage", t.cast(Storage, pool))
+
+    for vdev in ("logs", "cache", "spare"):
+        if vpool := zpool.get(vdev):
+            cmd.append("log" if vdev == "logs" else vdev)
+
+            for _pool in t.cast(list[Storage], vpool):
+                append(vdev, _pool)
+
+    return cmd
