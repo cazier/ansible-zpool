@@ -1,0 +1,456 @@
+test_zpool:
+  - name: striped storage pool
+    input: |
+      test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
+      	/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/03.raw	9.08T	137K	9.08T	-	-	0%	0.00%	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: stripe
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+  - name: raidz1 storage pools
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	100K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	105K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+  - name: striped/mirrored/raidz(1,2,3) storage pools
+    input: |
+      test	99.9T
+      	/tmp/01.raw	9.08T	31K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	raidz1-1	18.2T	75K	18.2T	-	-	0%	0.00%	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz2-2	27.2T	93K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz3-3	36.3T	82K	36.3T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/07.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/08.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/09.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/10.raw	-	-	-	-	-	-	-	-	ONLINE
+      	mirror-4	9.08T	31.5K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/11.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/12.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/13.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/14.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/15.raw	-	-	-	-	-	-	-	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: stripe
+          disks:
+            - 01.raw
+
+        - type: raidz1
+          disks:
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz2
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+        - type: raidz3
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+            - 10.raw
+
+        - type: mirror
+          disks:
+            - 11.raw
+            - 12.raw
+            - 13.raw
+            - 14.raw
+            - 15.raw
+
+  - name: striped log pools (w/ storage)
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	171K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	151K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      logs:
+        - type: stripe
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+
+  - name: mirrored log pools (w/ storage)
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	171K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	151K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	mirror-2	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      logs:
+        - type: mirror
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+
+  - name: striped/mirrored log pools (w/ storage)
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	173K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	161K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	mirror-5	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/10.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/11.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/12.raw	-	-	-	-	-	-	-	-	ONLINE
+
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      logs:
+        - type: stripe
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+
+        - type: mirror
+          disks:
+            - 10.raw
+            - 11.raw
+            - 12.raw
+
+  - name: spare disk pools (w/ storage)
+    input: |
+      test	27.2T
+      	raidz1-0	27.2T	241K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      spare                               -      -      -        -         -      -      -      -  -
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	AVAIL
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	AVAIL
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	AVAIL
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+      spare:
+        - disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+  - name: spare disk pools (w/ storage/logs)
+    input: |
+      test	27.2T
+      	raidz1-0	27.2T	253K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	mirror-1	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      spare                               -      -      -        -         -      -      -      -  -
+      	/tmp/07.raw	-	-	-	-	-	-	-	-	AVAIL
+      	/tmp/08.raw	-	-	-	-	-	-	-	-	AVAIL
+      	/tmp/09.raw	-	-	-	-	-	-	-	-	AVAIL
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+      logs:
+        - type: mirror
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      spare:
+        - disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+
+  - name: cache pools (w/ storage)
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	130K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	120K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      cache                               -      -      -        -         -      -      -      -  -
+      	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      cache:
+        - disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+
+  - name: cache pools (w/ storage/logs)
+    input: |
+      test	54.5T
+      	raidz1-0	27.2T	176K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/01.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz1-1	27.2T	149K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	/tmp/07.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/08.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/09.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      cache                               -      -      -        -         -      -      -      -  -
+      	/tmp/10.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/11.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/12.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+    expected:
+      name: test
+      storage:
+        - type: raidz1
+          disks:
+            - 01.raw
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz1
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+      logs:
+        - type: stripe
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+      cache:
+        - disks:
+            - 10.raw
+            - 11.raw
+            - 12.raw
+
+  - name: everything
+    input: |
+      test	99.9T
+      	/tmp/01.raw	9.08T	34K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	raidz1-1	18.2T	96K	18.2T	-	-	0%	0.00%	-	ONLINE
+      	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/03.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz2-2	27.2T	124K	27.2T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/04.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/05.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/06.raw	-	-	-	-	-	-	-	-	ONLINE
+      	raidz3-3	36.3T	128K	36.3T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/07.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/08.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/09.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/10.raw	-	-	-	-	-	-	-	-	ONLINE
+      	mirror-4	9.08T	39.5K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/11.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/12.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/13.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/14.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/15.raw	-	-	-	-	-	-	-	-	ONLINE
+      logs                                -      -      -        -         -      -      -      -  -
+      	/tmp/16.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/17.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	mirror-7	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/18.raw	-	-	-	-	-	-	-	-	ONLINE
+      	/tmp/19.raw	-	-	-	-	-	-	-	-	ONLINE
+      cache                               -      -      -        -         -      -      -      -  -
+      	/tmp/20.raw	9.08T	0	9.08T	-	-	0%	0.00%	-	ONLINE
+      spare                               -      -      -        -         -      -      -      -  -
+      	/tmp/21.raw	-	-	-	-	-	-	-	-	AVAIL
+
+    expected:
+      name: test
+      storage:
+        - type: stripe
+          disks:
+            - 01.raw
+
+        - type: raidz1
+          disks:
+            - scsi-SATA_SN9300G_SERIAL
+            - 03.raw
+
+        - type: raidz2
+          disks:
+            - 04.raw
+            - 05.raw
+            - 06.raw
+
+        - type: raidz3
+          disks:
+            - 07.raw
+            - 08.raw
+            - 09.raw
+            - 10.raw
+
+        - type: mirror
+          disks:
+            - 11.raw
+            - 12.raw
+            - 13.raw
+            - 14.raw
+            - 15.raw
+      logs:
+        - type: stripe
+          disks:
+            - 16.raw
+            - 17.raw
+
+        - type: mirror
+          disks:
+            - 18.raw
+            - 19.raw
+
+      cache:
+        - disks:
+            - 20.raw
+
+      spare:
+        - disks:
+            - 21.raw
+
+# CMD: zpool list -vPH -o name,size <POOL>

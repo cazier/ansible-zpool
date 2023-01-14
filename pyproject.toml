@@ -5,14 +5,18 @@ description = "An ansible module to configure/create/destroy zpools."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "zpool_collection"}]
+packages = [{include = "cazier"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 ansible-core = "^2.14.1"
 
-[tool.poetry.group.dev.dependencies]
+[tool.poetry.group.testing.dependencies]
 ward = "^0.67.0b0"
+pyyaml = "^6.0"
+ansible-core = "^2.14.1"
+
+[tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
 pylint = "^2.15.10"
 pre-commit = "^2.21.0"
@@ -27,3 +31,25 @@ darglint = "^1.8.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+line_length = 120
+length_sort = true
+multi_line_output = 3
+include_trailing_comma = true
+
+[tool.pylint.'FORMAT']
+max-line-length = 120
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = "missing-module-docstring,missing-function-docstring"
+
+[tool.mypy]
+strict = true
+mypy_path = "python"
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
