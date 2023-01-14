@@ -75,9 +75,7 @@ def get_zpool_data(console: str) -> ZType:
 
     sections: dict[str, str] = {
         k.strip(): v
-        for k, v in pairs(
-            ["storage"] + re.split(r"^(logs|cache|spare).*$", "\n".join(lines), flags=re.MULTILINE)
-        )
+        for k, v in pairs(["storage"] + re.split(r"^(logs|cache|spare).*$", "\n".join(lines), flags=re.MULTILINE))
     }
 
     for key in ("storage", "logs", "cache", "spare"):
