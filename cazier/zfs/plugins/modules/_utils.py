@@ -1,140 +1,274 @@
 import re
 import typing as t
 import itertools
-import collections
+import dataclasses
 
-Storage = dict[str, list[str] | str]
-ZType = dict[str, str | list[Storage]]
+_VdevHint = dict[str, str | list[str]]
+_PoolHint = dict[str, list[_VdevHint]]
 
 
-def console_to_ztype(console: str) -> ZType:
-    def pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
-        """Recipe to get overlapping pairs of items from an iterable: (ABCD) -> AB, BC, CD
+def _pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
+    """Recipe to get overlapping pairs of items from an iterable: (ABCD) -> AB, BC, CD
 
-        Args:
-            iterable (t.Iterable[str]): iterable of values
+    Args:
+        iterable (t.Iterable[str]): iterable of values
 
-        Yields:
-            tuple[str, str]: pairwise elements from the iterable
-        """
-        for first, second in zip(*[iter(iterable)] * 2, strict=True):
-            yield first, second
+    Yields:
+        tuple[str, str]: pairwise elements from the iterable
+    """
+    for first, second in zip(*[iter(iterable)] * 2, strict=True):
+        yield first, second
 
-    def _match(line: str, pattern: str, flags: int = 0) -> tuple[t.Optional[str], ...]:
-        """Helper function to try to match a pattern, or return ``None`` if no match is found
 
-        Args:
-            line (str): input string
-            pattern (str): regular expression pattern
-            flags (int): regex flags
+def _match(line: str, pattern: str, flags: int = 0) -> tuple[t.Optional[str], ...]:
+    """Helper function to try to match a pattern, or return ``None`` if no match is found
 
-        Returns:
-            t.Optional[str]: the matched string content, or None, if no match was found
-        """
-        if match := re.match(pattern, line, flags=flags):
-            return match.groups()
+    Args:
+        line (str): input string
+        pattern (str): regular expression pattern
+        flags (int): regex flags
 
-        return (None,)
+    Returns:
+        t.Optional[str]: the matched string content, or None, if no match was found
+    """
+    if match := re.match(pattern, line, flags=flags):
+        return match.groups()
 
-    def _get_disk(line: str) -> t.Optional[str]:
-        """Attempts to match a zpool list line for a drive/disk. This looks for an indentation along
-        with a leading `/` (slash).
+    return (None,)
 
-        If the result is a disk (found beneath /dev/disk/by-*), the result will be just the disk
-        name (i.e., scsi-SATA_SN9300G_SERIAL). If the result is a raw/sparse image, the full path
-        is returned (i.e., /tmp/subfolder/sparse.raw)
 
-        Args:
-            line (str): zpool list line
+def _get_disk(line: str) -> t.Optional[str]:
+    """Attempts to match a zpool list line for a drive/disk. This looks for an indentation along
+    with a leading `/` (slash).
 
-        Raises:
-            TypeError: When a disk is used, without it being the entire disk (i.e., one partition
-                not numbered `1`) an exception is raised.
+    If the result is a disk (found beneath /dev/disk/by-*), the result will be just the disk
+    name (i.e., scsi-SATA_SN9300G_SERIAL). If the result is a raw/sparse image, the full path
+    is returned (i.e., /tmp/subfolder/sparse.raw)
 
-        Returns:
-            t.Optional[str]: The final component of the disk name
-        """
-        match = _match(
-            line,
-            r"""^                         # Start of the line
-                \t                        # Leading tab (indentation)
-                (\/)                      # Capture only strings starting with a slash
-                (?:dev\/disk\/by-\w+\/)?  # Optional /dev/disk (ignoring /by-*/)
-                (.*?)                     # Capture for disk or raw image name
-                (?:-part(\d+)|)           # Capture a partition number, if it exists. Otherwise ""
-                \t                        # Tab signifying the end of the name
-                [\d-]                     # Disk usage numbers
-                """,
-            flags=re.VERBOSE,
-        )
+    Args:
+        line (str): zpool list line
 
-        if not match[0]:
-            return None
+    Raises:
+        TypeError: When a disk is used, without it being the entire disk (i.e., one partition
+            not numbered `1`) an exception is raised.
 
-        prefix, disk, part = match
+    Returns:
+        t.Optional[str]: The final component of the disk name
+    """
+    match = _match(
+        line,
+        r"""^                         # Start of the line
+            \t                        # Leading tab (indentation)
+            (\/)                      # Capture only strings starting with a slash
+            (?:dev\/disk\/by-\w+\/)?  # Optional /dev/disk (ignoring /by-*/)
+            (.*?)                     # Capture for disk or raw image name
+            (?:-part(\d+)|)           # Capture a partition number, if it exists. Otherwise ""
+            \t                        # Tab signifying the end of the name
+            [\d-]                     # Disk usage numbers
+            """,
+        flags=re.VERBOSE,
+    )
 
-        if part and int(part) != 1:
-            raise TypeError("Only using whole disk (or sparse images) is supported at this time.")
+    if not match[0]:
+        return None
 
-        if not part:
-            disk = f"{prefix}{disk}"
+    prefix, disk, part = match
 
-        return disk
+    if part and int(part) != 1:
+        raise TypeError("Only using whole disk (or sparse images) is supported at this time.")
 
-    def _get_type(line: str) -> t.Optional[str]:
-        """Attempts to match a zpool list line for the vdev type (raidz1, mirror, etc.)
+    if not part:
+        disk = f"{prefix}{disk}"
 
-        Args:
-            line (str): zpool list line
+    return disk
 
-        Returns:
-            t.Optional[str]: The vdev type
-        """
-        return _match(line, r"\t(raidz(?:1|2|3)|mirror)-\d+\t\d")[0]
 
-    zpool: dict[str, str | list[Storage]] = collections.defaultdict(list)
-    storage: Storage = collections.defaultdict(list)
+def _get_type(line: str) -> t.Optional[str]:
+    """Attempts to match a zpool list line for the vdev type (raidz1, mirror, etc.)
 
-    lines = console.strip().splitlines()
-    zpool["name"] = t.cast(str, _match(lines.pop(0), r"(.+?)\s\d")[0])
+    Args:
+        line (str): zpool list line
 
-    sections: dict[str, str] = {
-        k.strip(): v
-        for k, v in pairs(["storage"] + re.split(r"^(logs|cache|spare).*$", "\n".join(lines), flags=re.MULTILINE))
-    }
+    Returns:
+        t.Optional[str]: The vdev type
+    """
+    return _match(line, r"\t(raidz(?:1|2|3)|mirror)-\d+\t\d")[0]
 
-    for key in ("storage", "logs", "cache", "spare"):
-        storage.clear()
 
-        if key == "storage":
-            section = sections["storage"]
+@dataclasses.dataclass(eq=False)
+class Vdev:
+    disks: list[str] = dataclasses.field(default_factory=list)
+    type: t.Optional[str] = None
 
-        else:
-            section = sections.get(key, "")
+    def __eq__(self, __o: object) -> bool:
+        if not isinstance(__o, self.__class__):
+            return False
 
-        for current, future in itertools.pairwise(section.splitlines() + ["<terminator>"]):
-            if current in ("<terminator>", ""):
-                continue
+        if self.type != __o.type:
+            return False
 
-            if disk := _get_disk(current):
-                storage["disks"].append(disk)  # type: ignore[union-attr]
+        if set(self.disks) != set(__o.disks):
+            return False
 
-            elif _type := _get_type(current):
-                storage["type"] = _type
+        return True
+
+    def __hash__(self) -> int:
+        return hash((self.type, *set(self.disks)))
+
+    def __bool__(self) -> bool:
+        return len(self.disks) > 0
+
+    def append(self, item: str) -> None:
+        self.disks.append(item)
+
+    def clear(self) -> None:
+        self.disks.clear()
+
+    def dump(self) -> _VdevHint:
+        data = {"disks": self.disks}
+
+        if self.type:
+            data["type"] = self.type
+
+        return data
+
+
+@dataclasses.dataclass(eq=False)
+class _Pool:
+    name: str
+    vdevs: list[Vdev] = dataclasses.field(default_factory=list)
+
+    def __eq__(self, __o: object) -> bool:
+        if not isinstance(__o, self.__class__):
+            return False
+
+        if set(self.vdevs) != set(__o.vdevs):
+            return False
+
+        return True
+
+    def __bool__(self) -> bool:
+        return any(bool(vdev) for vdev in self.vdevs)
+
+    def append(self, item: Vdev) -> None:
+        self.vdevs.append(item)
+
+    def new(self) -> Vdev:
+        self.append((vdev := Vdev()))
+
+        return vdev
+
+    def dump(self) -> _PoolHint:
+        return [vdev.dump() for vdev in self.vdevs if vdev]
+
+    @property
+    def create(self) -> str:
+        return self.name
+
+
+@dataclasses.dataclass
+class StoragePool(_Pool):
+    name: str = "storage"
+    redundancy: bool = True
+
+
+@dataclasses.dataclass
+class LogPool(_Pool):
+    name: str = "logs"
+    redundancy: bool = True
+
+    @property
+    def create(self) -> str:
+        return "log"
+
+
+@dataclasses.dataclass
+class CachePool(_Pool):
+    name: str = "cache"
+    redundancy: bool = False
+
+
+@dataclasses.dataclass
+class SparePool(_Pool):
+    name: str = "spares"
+    redundancy: bool = False
+
+
+@dataclasses.dataclass()
+class Zpool:
+    name: str = dataclasses.field(metadata={"dump": False})
+    storage: StoragePool = dataclasses.field(default_factory=StoragePool)
+    logs: LogPool = dataclasses.field(default_factory=LogPool)
+    cache: CachePool = dataclasses.field(default_factory=CachePool)
+    spare: SparePool = dataclasses.field(default_factory=SparePool)
+
+    def get_pool(self, name: str) -> StoragePool | LogPool | CachePool | SparePool:
+        return getattr(self, name)
+
+    @property
+    def pools(self) -> t.Iterator[dataclasses.Field]:
+        yield from (field for field in dataclasses.fields(self) if field.metadata.get("dump", True))
+
+    def dump(self) -> dict[str, str | _PoolHint]:
+        data = {"name": self.name}
+
+        for field in self.pools:
+            if pool := self.get_pool(field.name):
+                data[field.name] = pool.dump()
+
+        return data
+
+    @classmethod
+    def parse_console(cls, console: str) -> "Zpool":
+        lines = console.strip().splitlines()
+        [name] = _match(lines.pop(0), r"(.+?)\s\d")
+
+        if not name:
+            raise ValueError("Could not match a zpool name from the console text.")
+
+        zpool = cls(name)
+
+        sections: dict[str, str] = {
+            k.strip(): v
+            for k, v in _pairs(["storage"] + re.split(r"^(logs|cache|spare).*$", "\n".join(lines), flags=re.MULTILINE))
+        }
+
+        for key in map(lambda k: k.name, zpool.pools):
+            pool = zpool.get_pool(key)
+
+            vdev = pool.new()
+
+            if key == "storage":
+                section = sections["storage"]
 
             else:
-                raise TypeError("Couldn't parse the zpool list data properly.")
+                section = sections.get(key, "")
 
-            if (_type := _get_type(future)) or future == "<terminator>":
-                if storage:
-                    if not storage.get("type") and key not in ("spare", "cache"):
-                        storage["type"] = "stripe"
+            for current, future in itertools.pairwise(section.splitlines() + ["<terminator>"]):
+                if current in ("<terminator>", ""):
+                    continue
 
-                    zpool[key].append(dict(storage))  # type: ignore[union-attr]
+                if disk := _get_disk(current):
+                    vdev.disks.append(disk)
 
-                    storage.clear()
+                elif _type := _get_type(current):
+                    vdev.type = _type
 
-    return dict(zpool)
+                else:
+                    raise TypeError("Couldn't parse the zpool list data properly.")
+
+                if (_type := _get_type(future)) or future == "<terminator>":
+                    if vdev:
+                        if not vdev.type and pool.redundancy:
+                            vdev.type = "stripe"
+
+                    vdev = pool.new()
+
+        return zpool
+
+
+
+
 
 
 def ztype_to_create(zpool: ZType) -> list[str]:
