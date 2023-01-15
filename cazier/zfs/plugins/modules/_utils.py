@@ -118,11 +118,12 @@ class Vdev:
     def __bool__(self) -> bool:
         return len(self.disks) > 0
 
-    def append(self, item: str) -> None:
-        self.disks.append(item)
+    def append(self, *item: str) -> None:
+        self.disks.extend(item)
 
     def clear(self) -> None:
         self.disks.clear()
+        self.type = None
 
     def dump(self) -> _VdevHint:
         data: _VdevHint = {"disks": self.disks}
@@ -161,8 +162,8 @@ class _Pool:
     def __bool__(self) -> bool:
         return any(bool(vdev) for vdev in self.vdevs)
 
-    def append(self, item: Vdev) -> None:
-        self.vdevs.append(item)
+    def append(self, *item: Vdev) -> None:
+        self.vdevs.extend(item)
 
     def new(self) -> Vdev:
         self.append((vdev := Vdev()))
