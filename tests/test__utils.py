@@ -1,16 +1,13 @@
 import typing as t
-import pathlib
 
-import yaml
 from ward import test, raises
 
+from tests.conftest import TEST_DATA
 from cazier.zfs.plugins.modules._utils import Zpool
 
-data: dict[str, t.Any] = yaml.safe_load(
-    pathlib.Path(__file__).parent.joinpath("test_data.yaml").read_text(encoding="utf8")
-)
+FILE = __name__.replace("test_", "")
 
-for item in data[__name__]:
+for item in TEST_DATA[FILE]:
 
     # pylint: disable-next=cell-var-from-loop
     @test(f"parsing zpool list: {item['name']}")  # type: ignore[misc]
@@ -32,7 +29,7 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
     assert "Only using whole disk (or sparse images) is supported" in str(exception.raised)
 
 
-for item in data[__name__]:
+for item in TEST_DATA[FILE]:
 
     # pylint: disable-next=cell-var-from-loop
     @test(f"zpool create command: {item['name']}")  # type: ignore[misc]
