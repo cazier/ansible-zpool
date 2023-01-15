@@ -48,7 +48,7 @@ include_trailing_comma = true
 max-line-length = 120
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = "missing-module-docstring,missing-function-docstring"
+disable = "missing-module-docstring,missing-class-docstring,missing-function-docstring"
 
 [tool.mypy]
 strict = true

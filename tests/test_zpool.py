@@ -36,6 +36,5 @@ for item in data[__name__]:
 
     # pylint: disable-next=cell-var-from-loop
     @test(f"zpool create command: {item['name']}")  # type: ignore[misc]
-    def _(create: str = item["create"], _list: dict[str, t.Any] = item["list"]) -> None:
-
-        assert " ".join(ztype_to_create(_list)) == create
+    def _(console: str = item["console"], create: str = item["create"]) -> None:
+        assert " ".join(Zpool.parse_console(console).create_command()) == create

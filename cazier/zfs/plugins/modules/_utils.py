@@ -4,7 +4,7 @@ import itertools
 import dataclasses
 
 _VdevHint = dict[str, str | list[str]]
-_PoolHint = dict[str, list[_VdevHint]]
+_PoolHint = list[_VdevHint]
 
 
 def _pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
@@ -125,12 +125,23 @@ class Vdev:
         self.disks.clear()
 
     def dump(self) -> _VdevHint:
-        data = {"disks": self.disks}
+        data: _VdevHint = {"disks": self.disks}
 
         if self.type:
             data["type"] = self.type
 
         return data
+
+    def creation(self) -> list[str]:
+        cmd = []
+
+        if self:
+            if self.type and self.type != "stripe":
+                cmd.append(self.type)
+
+            cmd.extend(self.disks)
+
+        return cmd
 
 
 @dataclasses.dataclass(eq=False)
@@ -162,14 +173,29 @@ class _Pool:
         return [vdev.dump() for vdev in self.vdevs if vdev]
 
     @property
-    def create(self) -> str:
-        return self.name
+    def create(self) -> list[str]:
+        return [self.name]
+
+    def creation(self) -> list[str]:
+        cmd = []
+
+        if self:
+            cmd.extend(self.create)
+
+            for vdev in self.vdevs:
+                cmd.extend(vdev.creation())
+
+        return cmd
 
 
 @dataclasses.dataclass
 class StoragePool(_Pool):
     name: str = "storage"
     redundancy: bool = True
+
+    @property
+    def create(self) -> list[str]:
+        return []
 
 
 @dataclasses.dataclass
@@ -178,8 +204,8 @@ class LogPool(_Pool):
     redundancy: bool = True
 
     @property
-    def create(self) -> str:
-        return "log"
+    def create(self) -> list[str]:
+        return ["log"]
 
 
 @dataclasses.dataclass
@@ -190,7 +216,7 @@ class CachePool(_Pool):
 
 @dataclasses.dataclass
 class SparePool(_Pool):
-    name: str = "spares"
+    name: str = "spare"
     redundancy: bool = False
 
 
@@ -202,15 +228,22 @@ class Zpool:
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
 
-    def get_pool(self, name: str) -> StoragePool | LogPool | CachePool | SparePool:
-        return getattr(self, name)
+    def get_pool(self, name: str | dataclasses.Field[_Pool]) -> StoragePool | LogPool | CachePool | SparePool:
+        if isinstance(name, dataclasses.Field):
+            name = name.name
+
+        return t.cast(t.Union[StoragePool, LogPool, CachePool, SparePool], getattr(self, name))
 
     @property
-    def pools(self) -> t.Iterator[dataclasses.Field]:
+    def pools(self) -> t.Iterator[dataclasses.Field[_Pool]]:
         yield from (field for field in dataclasses.fields(self) if field.metadata.get("dump", True))
 
+    @property
+    def names(self) -> t.Iterator[str]:
+        yield from (field.name for field in dataclasses.fields(self) if field.metadata.get("dump", True))
+
     def dump(self) -> dict[str, str | _PoolHint]:
-        data = {"name": self.name}
+        data: dict[str, str | _PoolHint] = {"name": self.name}
 
         for field in self.pools:
             if pool := self.get_pool(field.name):
@@ -233,7 +266,7 @@ class Zpool:
             for k, v in _pairs(["storage"] + re.split(r"^(logs|cache|spare).*$", "\n".join(lines), flags=re.MULTILINE))
         }
 
-        for key in map(lambda k: k.name, zpool.pools):
+        for key in zpool.names:
             pool = zpool.get_pool(key)
 
             vdev = pool.new()
@@ -266,39 +299,16 @@ class Zpool:
 
         return zpool
 
+    def create_command(self) -> list[str]:
+        """Convert a set of input data to a list containing the variables for the `zpool create`
+        command.
 
+        Returns:
+            list[str]: creation command line arguments
+        """
+        cmd = [self.name]
 
+        for pool in self.names:
+            cmd.extend(self.get_pool(pool).creation())
 
-
-
-def ztype_to_create(zpool: ZType) -> list[str]:
-    """Convert a set of input data to a list containing the variables for the `zpool create`
-    command.
-
-    Args:
-        zpool (ZType): input data
-
-    Returns:
-        list[str]: creation command line arguments
-    """
-    # TODO: There are a lot of t.casts in here...
-    def append(vdev: str, pool: Storage) -> None:
-        if vdev in ("storage", "logs"):
-            if (_type := pool.get("type", "stripe")) != "stripe":
-                cmd.append(t.cast(str, _type))
-
-        cmd.extend(t.cast(list[str], pool["disks"]))
-
-    cmd = [t.cast(str, zpool["name"])]
-
-    for pool in zpool["storage"]:
-        append("storage", t.cast(Storage, pool))
-
-    for vdev in ("logs", "cache", "spare"):
-        if vpool := zpool.get(vdev):
-            cmd.append("log" if vdev == "logs" else vdev)
-
-            for _pool in t.cast(list[Storage], vpool):
-                append(vdev, _pool)
-
-    return cmd
+        return cmd
