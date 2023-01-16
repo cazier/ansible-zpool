@@ -113,17 +113,17 @@ class Vdev:
         return True
 
     def __hash__(self) -> int:
-        return hash((self.type, *set(self.disks)))
+        return hash((self.type, *sorted(self.disks)))
 
     def __bool__(self) -> bool:
         return len(self.disks) > 0
 
-    def append(self, *item: str) -> None:
-        self.disks.extend(item)
+    def append(self, *items: str) -> None:
+        self.disks.extend(items)
 
     def clear(self) -> None:
         self.disks.clear()
-        self.type = None
+        self.type = Vdev.type
 
     def dump(self) -> _VdevHint:
         data: _VdevHint = {"disks": self.disks}
@@ -148,7 +148,21 @@ class Vdev:
 @dataclasses.dataclass(eq=False)
 class _Pool:
     name: str
+    redundancy: bool = dataclasses.field(default=False, init=False)
     vdevs: list[Vdev] = dataclasses.field(default_factory=list)
+    _default_vdev_: t.Optional[str] = dataclasses.field(default=None, init=False)
+
+    @classmethod
+    def _check_redundancy(cls, *items: Vdev) -> None:
+        if not cls.redundancy and any(item.type for item in items):
+            raise ValueError(f"Non-redundant pools (i.e., class: {cls.__name__}) cannot have a type argument.")
+
+    def __post_init__(self) -> None:
+        for vdev in self.vdevs:
+            self._check_redundancy(vdev)
+
+            if vdev.type is None:
+                vdev.type = self._default_vdev_
 
     def __eq__(self, __o: object) -> bool:
         if not isinstance(__o, self.__class__):
@@ -159,14 +173,40 @@ class _Pool:
 
         return True
 
+    def __contains__(self, element: Vdev) -> bool:
+        return element in self.vdevs
+
     def __bool__(self) -> bool:
         return any(bool(vdev) for vdev in self.vdevs)
 
-    def append(self, *item: Vdev) -> None:
-        self.vdevs.extend(item)
+    def _append(self, *items: Vdev) -> None:
+        self._check_redundancy(*items)
+        self.vdevs.extend(items)
 
-    def new(self) -> Vdev:
-        self.append((vdev := Vdev()))
+    def append(self, *items: Vdev) -> None:
+        if len(self.vdevs) > 0:
+            raise ValueError(
+                f"Cannot add new vdevs to a {self.__class__.__name__}. The existing vdev can only be extended."
+            )
+
+        self._append(*items)
+
+    def extend(self, *items: Vdev | str) -> None:
+        new: list[str] = []
+
+        for item in items:
+            if isinstance(item, Vdev):
+                self._check_redundancy(item)
+                new.extend(item.disks)
+
+            else:
+                new.append(item)
+
+        self.vdevs[-1].append(*new)
+
+    def new(self, _type: t.Optional[str] = None) -> Vdev:
+        self._check_redundancy((vdev := Vdev(type=_type)))
+        self.append(vdev)
 
         return vdev
 
@@ -190,9 +230,28 @@ class _Pool:
 
 
 @dataclasses.dataclass
-class StoragePool(_Pool):
+class _Redundant(_Pool):
+    redundancy: bool = dataclasses.field(default=True, init=False)
+    _default_vdev_: str = dataclasses.field(default="stripe", init=False)
+
+    def new(self, _type: t.Optional[str] = None) -> Vdev:
+        if _type is None:
+            _type = _Redundant._default_vdev_
+
+        return super().new(_type)
+
+    def append(self, *items: Vdev) -> None:
+        self._append(*items)
+
+    # def extend(self, *items: Vdev) -> None:
+    #     raise ValueError(
+    #         f"Cannot extend an existing vdev in a {self.__class__.__name__}. A new vdev must be appended."
+    #     )
+
+
+@dataclasses.dataclass
+class StoragePool(_Redundant):
     name: str = "storage"
-    redundancy: bool = True
 
     @property
     def create(self) -> list[str]:
@@ -200,9 +259,8 @@ class StoragePool(_Pool):
 
 
 @dataclasses.dataclass
-class LogPool(_Pool):
+class LogPool(_Redundant):
     name: str = "logs"
-    redundancy: bool = True
 
     @property
     def create(self) -> list[str]:
@@ -212,16 +270,14 @@ class LogPool(_Pool):
 @dataclasses.dataclass
 class CachePool(_Pool):
     name: str = "cache"
-    redundancy: bool = False
 
 
 @dataclasses.dataclass
 class SparePool(_Pool):
     name: str = "spare"
-    redundancy: bool = False
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Zpool:
     name: str = dataclasses.field(metadata={"dump": False})
     storage: StoragePool = dataclasses.field(default_factory=StoragePool)
@@ -292,11 +348,8 @@ class Zpool:
                     raise TypeError("Couldn't parse the zpool list data properly.")
 
                 if (_type := _get_type(future)) or future == "<terminator>":
-                    if vdev:
-                        if not vdev.type and pool.redundancy:
-                            vdev.type = "stripe"
-
-                    vdev = pool.new()
+                    if isinstance(pool, _Redundant):
+                        vdev = pool.new()
 
         return zpool
 
