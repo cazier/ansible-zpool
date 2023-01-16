@@ -1,20 +1,16 @@
-# pylint: disable=invalid-name, wildcard-import, protected-access
+# pylint: disable=invalid-name,wildcard-import,protected-access,unused-argument
 
 import typing as t
 
 from ward import test, xfail, raises
 
-from tests.conftest import TEST_DATA
-from cazier.zfs.plugins.modules._utils import *
-from cazier.zfs.plugins.modules._utils import _Pool, _match, _pairs, _get_disk, _get_type
+from tests.conftest import test_data
+from cazier.zfs.plugins.modules.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
 
-FILE = __name__.replace("test_", "")
+for item in test_data()("utils"):
 
-for item in TEST_DATA[FILE]:
-
-    # pylint: disable-next=cell-var-from-loop
-    @test(f"parsing zpool list: {item['name']}")  # type: ignore[misc]
-    def _(console: str = item["console"], _list: dict[str, t.Any] = item["list"]) -> None:
+    @test("parsing zpool list: {name}")  # type: ignore[misc]
+    def _(console: str = item["console"], _list: dict[str, t.Any] = item["list"], name: str = item["name"]) -> None:
         assert Zpool.parse_console(console).dump() == _list
 
 
@@ -32,11 +28,10 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
     assert "Only using whole disk (or sparse images) is supported" in str(exception.raised)
 
 
-for item in TEST_DATA[FILE]:
+for item in test_data()("utils"):
 
-    # pylint: disable-next=cell-var-from-loop
-    @test(f"zpool create command: {item['name']}")  # type: ignore[misc]
-    def _(console: str = item["console"], create: str = item["create"]) -> None:
+    @test("zpool create command: {name}")  # type: ignore[misc]
+    def _(console: str = item["console"], create: str = item["create"], name: str = item["name"]) -> None:
         assert " ".join(Zpool.parse_console(console).create_command()) == create
 
 

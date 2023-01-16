@@ -1,0 +1,78 @@
+match:
+  - name: proper match
+    input: 1-2-3
+    expected: {'a': '1', 'b': '2', 'c': '3'}
+
+  - name: no match
+    input: 1-2
+    expected: {}
+
+get_disk:
+  - name: blank line
+    input: ""
+    expected: null
+
+  - name: sparse image
+    input: |
+      	/tmp/image.raw	-
+    expected: /tmp/image.raw
+
+  - name: sparse image at root
+    input: |
+      	/image.raw	-
+    expected: /image.raw
+
+  - name: sparse image with data
+    input: |
+      	/image.raw	9
+    expected: /image.raw
+
+  - name: actual disk
+    input: |
+      	/dev/disk/by-id/id-part1	-
+    expected: id
+
+  - name: disk in other directory
+    input: |
+      	/dev/disk/by-uuid/id-part1	-
+    expected: id
+
+  - name: disk at root directory as image
+    input: |
+      	/dev/disk/id-part1	-
+    expected: /dev/disk/id-part1
+
+  - name: no match
+    input: |
+      	/image.raw
+    expected: null
+
+get_type:
+  - name: blank line
+    input: ""
+    expected: null
+
+  - name: raidz1
+    input: |
+      	raidz1-0	1
+    expected: raidz1
+
+  - name: raidz2
+    input: |
+      	raidz2-0	1
+    expected: raidz2
+
+  - name: raidz3
+    input: |
+      	raidz3-0	1
+    expected: raidz3
+
+  - name: raidz4
+    input: |
+      	raidz4-0	1
+    expected: null
+
+  - name: mirror
+    input: |
+      	mirror-0	1
+    expected: mirror

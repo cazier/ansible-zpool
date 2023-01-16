@@ -8,7 +8,7 @@ _PoolHint = list[_VdevHint]
 
 
 def _pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
-    """Recipe to get overlapping pairs of items from an iterable: (ABCD) -> AB, BC, CD
+    """Recipe to get overlapping pairs of items from an iterable: (ABCD) -> AB, CD, EF, ...
 
     Args:
         iterable (t.Iterable[str]): iterable of values
@@ -20,7 +20,7 @@ def _pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
         yield first, second
 
 
-def _match(line: str, pattern: str, flags: int = 0) -> tuple[t.Optional[str], ...]:
+def _match(line: str, pattern: str, flags: int = 0) -> dict[str, str | None]:
     """Helper function to try to match a pattern, or return ``None`` if no match is found
 
     Args:
@@ -32,9 +32,9 @@ def _match(line: str, pattern: str, flags: int = 0) -> tuple[t.Optional[str], ..
         t.Optional[str]: the matched string content, or None, if no match was found
     """
     if match := re.match(pattern, line, flags=flags):
-        return match.groups()
+        return match.groupdict()
 
-    return (None,)
+    return {}
 
 
 def _get_disk(line: str) -> t.Optional[str]:
@@ -57,28 +57,31 @@ def _get_disk(line: str) -> t.Optional[str]:
     """
     match = _match(
         line,
-        r"""^                         # Start of the line
-            \t                        # Leading tab (indentation)
-            (\/)                      # Capture only strings starting with a slash
-            (?:dev\/disk\/by-\w+\/)?  # Optional /dev/disk (ignoring /by-*/)
-            (.*?)                     # Capture for disk or raw image name
-            (?:-part(\d+)|)           # Capture a partition number, if it exists. Otherwise ""
-            \t                        # Tab signifying the end of the name
-            [\d-]                     # Disk usage numbers
+        r"""^                                      # Start of the line
+            \t                                     # Leading tab (indentation)
+            (?P<prefix>\/)                         # Capture only strings starting with a slash
+            (?P<dev>dev\/disk\/by-\w+\/)?          # Optional /dev/disk (ignoring /by-*/)
+            (?P<disk>.*?)                          # Capture for disk or raw image name
+            (?P<partition>-part(?P<number>\d+)|)   # Capture a partition number, if it exists. Otherwise ""
+            \t                                     # Tab signifying the end of the name
+            [\d-]                                  # Disk usage numbers
             """,
         flags=re.VERBOSE,
     )
 
-    if not match[0]:
+    if match == {}:
         return None
 
-    prefix, disk, part = match
-
-    if part and int(part) != 1:
+    if (number := match.pop("number")) and int(number) != 1:
         raise TypeError("Only using whole disk (or sparse images) is supported at this time.")
 
-    if not part:
+    prefix, dev, disk, partition = match.values()
+
+    if not number and not dev:
         disk = f"{prefix}{disk}"
+
+    if number and not dev:
+        disk = f"{prefix}{disk}{partition}"
 
     return disk
 
@@ -92,7 +95,7 @@ def _get_type(line: str) -> t.Optional[str]:
     Returns:
         t.Optional[str]: The vdev type
     """
-    return _match(line, r"\t(raidz(?:1|2|3)|mirror)-\d+\t\d")[0]
+    return _match(line, r"\t(?P<type>raidz(?:1|2|3)|mirror)-\d+\t\d").get("type")
 
 
 @dataclasses.dataclass(eq=False)
@@ -311,7 +314,7 @@ class Zpool:
     @classmethod
     def parse_console(cls, console: str) -> "Zpool":
         lines = console.strip().splitlines()
-        [name] = _match(lines.pop(0), r"(.+?)\s\d")
+        name = _match(lines.pop(0), r"(?P<name>.+?)\s\d").get("name")
 
         if not name:
             raise ValueError("Could not match a zpool name from the console text.")
