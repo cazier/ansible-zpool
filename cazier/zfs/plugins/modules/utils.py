@@ -121,6 +121,21 @@ class Vdev:
     def __bool__(self) -> bool:
         return len(self.disks) > 0
 
+    def __sub__(self, other: "Vdev") -> set[str]:
+        if self.type != other.type:
+            raise ValueError("Diffing of vdevs with different types is not supported.")
+
+        return set(self.disks).difference(other.disks)
+
+    def difference(self, other: "Vdev") -> set[str]:
+        return self - other
+
+    def __xor__(self, other: "Vdev") -> set[str]:
+        return (self - Vdev()).union(other - Vdev())
+
+    def symmetric_difference(self, other: "Vdev") -> set[str]:
+        return self ^ other
+
     def append(self, *items: str) -> None:
         self.disks.extend(items)
 
@@ -150,7 +165,7 @@ class Vdev:
 
 @dataclasses.dataclass(eq=False)
 class _Pool:
-    name: str
+    name: str = dataclasses.field(default="", init=False)  # This is intentionally blank, as it gets set by the subclass
     redundancy: bool = dataclasses.field(default=False, init=False)
     vdevs: list[Vdev] = dataclasses.field(default_factory=list)
     _default_vdev_: t.Optional[str] = dataclasses.field(default=None, init=False)
@@ -181,6 +196,21 @@ class _Pool:
 
     def __bool__(self) -> bool:
         return any(bool(vdev) for vdev in self.vdevs)
+
+    def __sub__(self, other: "_Pool") -> set[Vdev]:
+        if type(self) != type(other):  # pylint: disable=unidiomatic-typecheck
+            raise ValueError("Diffing of different pool types is not supported.")
+
+        return set(self.vdevs).difference(other.vdevs)
+
+    def difference(self, other: "_Pool") -> set[Vdev]:
+        return self - other
+
+    def __xor__(self, other: "_Pool") -> set[Vdev]:
+        return (self - _Pool()).union(other - _Pool())
+
+    def symmetric_difference(self, other: "_Pool") -> set[Vdev]:
+        return self ^ other
 
     def _append(self, *items: Vdev) -> None:
         self._check_redundancy(*items)
@@ -245,11 +275,6 @@ class _Redundant(_Pool):
 
     def append(self, *items: Vdev) -> None:
         self._append(*items)
-
-    # def extend(self, *items: Vdev) -> None:
-    #     raise ValueError(
-    #         f"Cannot extend an existing vdev in a {self.__class__.__name__}. A new vdev must be appended."
-    #     )
 
 
 @dataclasses.dataclass

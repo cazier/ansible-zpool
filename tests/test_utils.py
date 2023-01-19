@@ -79,8 +79,8 @@ def _() -> None:
 
 @test("pools: generic and redundant")  # type: ignore[misc]
 def _() -> None:
-    a = _Pool("a")
-    b = _Pool("b")
+    a = _Pool()
+    b = _Pool()
 
     assert a == b
     assert not a
@@ -160,6 +160,56 @@ def _() -> None:
 @xfail
 @test("pools: todo")  # type: ignore[misc]
 def _() -> None:
-    a = _Pool("a", [Vdev(["drive0.raw", "drive1.raw"])])
+    a = _Pool([Vdev(["drive0.raw", "drive1.raw"])])
 
     assert a.dump() == a
+
+
+@test("diffs")  # type: ignore[misc]
+def _() -> None:
+    a = Vdev()
+    b = Vdev(["drive0.raw", "drive1.raw", "drive2.raw"])
+    c = Vdev(["drive0.raw", "drive2.raw"])
+    d = Vdev(["drive1.raw", "drive3.raw"])
+
+    assert a - b == set()
+    assert a.difference(b) == set()
+
+    assert b - a == {"drive0.raw", "drive1.raw", "drive2.raw"}
+    assert b - c == {"drive1.raw"}
+    assert c - b == set()
+
+    assert c ^ d == {"drive0.raw", "drive2.raw", "drive1.raw", "drive3.raw"}
+    assert c.symmetric_difference(d) == {"drive0.raw", "drive2.raw", "drive1.raw", "drive3.raw"}
+
+    assert Vdev() ^ Vdev() == set()
+
+    with raises(ValueError) as expected:
+        _ = Vdev(type="striped") ^ Vdev(type="mirror")
+    assert "Diffing of vdevs with different types is not supported." in str(expected.raised)
+
+    e = _Pool()
+    f = _Pool([Vdev(["drive0.raw"]), Vdev(["drive1.raw"]), Vdev(["drive2.raw"])])
+    g = _Pool([Vdev(["drive0.raw"]), Vdev(["drive2.raw"])])
+    h = _Pool([Vdev(["drive1.raw"]), Vdev(["drive3.raw"])])
+
+    assert e - f == set()
+    assert e.difference(f) == set()
+
+    assert f - e == {Vdev(["drive0.raw"]), Vdev(["drive1.raw"]), Vdev(["drive2.raw"])}
+    assert f - g == {Vdev(["drive1.raw"])}
+    assert g - f == set()
+
+    assert g ^ h == {Vdev(["drive0.raw"]), Vdev(["drive1.raw"]), Vdev(["drive2.raw"]), Vdev(["drive3.raw"])}
+    assert g.symmetric_difference(h) == {
+        Vdev(["drive0.raw"]),
+        Vdev(["drive1.raw"]),
+        Vdev(["drive2.raw"]),
+        Vdev(["drive3.raw"]),
+    }
+
+    assert _Pool() ^ _Pool() == set()
+
+    with raises(ValueError) as expected:
+        _ = StoragePool() ^ _Pool()
+    assert "Diffing of different pool types is not supported." in str(expected.raised)
