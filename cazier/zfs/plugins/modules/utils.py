@@ -4,7 +4,10 @@ import itertools
 import dataclasses
 
 _VdevHint = dict[str, str | list[str]]
-_PoolHint = list[_VdevHint]
+_PoolHint = dict[str, list[_VdevHint]]
+_ZpoolHint = dict[str, str | list[_VdevHint]]
+
+_PoolsHint = t.Union["StoragePool", "LogPool", "CachePool", "SparePool"]
 
 
 def _pairs(iterable: t.Iterable[str]) -> t.Iterator[tuple[str, str]]:
@@ -103,8 +106,24 @@ class Vdev:
     disks: list[str] = dataclasses.field(default_factory=list)
     type: t.Optional[str] = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.disks, t.Iterable):
+            raise TypeError(f"A {self.__class__.__name__} must have an iterable as the disks argument.")
+
+        self.disks = list(self.disks)
+
     def __eq__(self, __o: object) -> bool:
-        if not isinstance(__o, self.__class__):
+        if isinstance(__o, dict):
+            try:
+                __o = Vdev.load(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if isinstance(__o, (list, set, tuple)):
+            __o = Vdev(disks=list(__o))
+
+        elif not isinstance(__o, self.__class__):
             return False
 
         if self.type != __o.type:
@@ -162,10 +181,14 @@ class Vdev:
 
         return cmd
 
+    @classmethod
+    def load(cls, data: _VdevHint) -> "Vdev":
+        return cls(type=data.get("type"), disks=data.get("disks", []))  # type: ignore[arg-type]
 
-@dataclasses.dataclass(eq=False)
+
+@dataclasses.dataclass
 class _Pool:
-    name: str = dataclasses.field(default="", init=False)  # This is intentionally blank, as it gets set by the subclass
+    name: str = dataclasses.field(default="", init=False)
     redundancy: bool = dataclasses.field(default=False, init=False)
     vdevs: list[Vdev] = dataclasses.field(default_factory=list)
     _default_vdev_: t.Optional[str] = dataclasses.field(default=None, init=False)
@@ -177,13 +200,28 @@ class _Pool:
 
     def __post_init__(self) -> None:
         for vdev in self.vdevs:
+            if not isinstance(vdev, Vdev):
+                raise TypeError(
+                    f"A {self.__class__.__name__} cannot be initialized with non-Vdevs. "
+                    "Use .load() to create from a container."
+                )
             self._check_redundancy(vdev)
 
             if vdev.type is None:
                 vdev.type = self._default_vdev_
 
     def __eq__(self, __o: object) -> bool:
-        if not isinstance(__o, self.__class__):
+        if isinstance(__o, dict):
+            try:
+                __o = self.load(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if isinstance(__o, (list, tuple)):
+            __o = self.load({self.name: list(__o)})
+
+        elif not isinstance(__o, self.__class__):
             return False
 
         if set(self.vdevs) != set(__o.vdevs):
@@ -244,7 +282,7 @@ class _Pool:
         return vdev
 
     def dump(self) -> _PoolHint:
-        return [vdev.dump() for vdev in self.vdevs if vdev]
+        return {self.name: [vdev.dump() for vdev in self.vdevs if vdev]}
 
     @property
     def create(self) -> list[str]:
@@ -261,8 +299,20 @@ class _Pool:
 
         return cmd
 
+    @classmethod
+    def load(cls, data: _PoolHint) -> _PoolsHint:
+        if len(keys := list(data.items())) > 1:
+            raise TypeError(f"Could not create a {cls.__name__} from this input data: There were too many pools.")
 
-@dataclasses.dataclass
+        if len(keys) == 0:
+            raise TypeError(f"Could not create a {cls.__name__} from this input data: The input data has no pools.")
+
+        [[_type, disks]] = keys
+
+        return get_pool(_type)([Vdev.load(disk) for disk in disks])  # pylint: disable=not-callable
+
+
+@dataclasses.dataclass(eq=False)
 class _Redundant(_Pool):
     redundancy: bool = dataclasses.field(default=True, init=False)
     _default_vdev_: str = dataclasses.field(default="stripe", init=False)
@@ -277,32 +327,51 @@ class _Redundant(_Pool):
         self._append(*items)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class StoragePool(_Redundant):
-    name: str = "storage"
+    name: str = dataclasses.field(default="storage", init=False)
 
     @property
     def create(self) -> list[str]:
         return []
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class LogPool(_Redundant):
-    name: str = "logs"
+    name: str = dataclasses.field(default="logs", init=False)
 
     @property
     def create(self) -> list[str]:
         return ["log"]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class CachePool(_Pool):
-    name: str = "cache"
+    name: str = dataclasses.field(default="cache", init=False)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class SparePool(_Pool):
-    name: str = "spare"
+    name: str = dataclasses.field(default="spare", init=False)
+
+
+def get_pool(_type: str) -> t.Type[_PoolsHint]:
+    # FIXME: I don't like this... Isn't there a module level getattr()?
+    match _type:
+        case "storage":
+            return StoragePool
+
+        case "logs":
+            return LogPool
+
+        case "cache":
+            return CachePool
+
+        case "spare":
+            return SparePool
+
+        case _:
+            raise AttributeError("Could not find the requested pool type in the module.")
 
 
 @dataclasses.dataclass
@@ -313,11 +382,11 @@ class Zpool:
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
 
-    def get_pool(self, name: str | dataclasses.Field[_Pool]) -> StoragePool | LogPool | CachePool | SparePool:
+    def get_pool(self, name: str | dataclasses.Field[_Pool]) -> _PoolsHint:
         if isinstance(name, dataclasses.Field):
             name = name.name
 
-        return t.cast(t.Union[StoragePool, LogPool, CachePool, SparePool], getattr(self, name))
+        return t.cast(_PoolsHint, getattr(self, name))
 
     @property
     def pools(self) -> t.Iterator[dataclasses.Field[_Pool]]:
@@ -327,17 +396,17 @@ class Zpool:
     def names(self) -> t.Iterator[str]:
         yield from (field.name for field in dataclasses.fields(self) if field.metadata.get("dump", True))
 
-    def dump(self) -> dict[str, str | _PoolHint]:
-        data: dict[str, str | _PoolHint] = {"name": self.name}
+    def dump(self) -> _ZpoolHint:
+        data: _ZpoolHint = {"name": self.name}
 
-        for field in self.pools:
-            if pool := self.get_pool(field.name):
-                data[field.name] = pool.dump()
+        for pool_type in self.names:
+            if pool := self.get_pool(pool_type):
+                data[pool_type] = pool.dump()[pool_type]
 
         return data
 
     @classmethod
-    def parse_console(cls, console: str) -> "Zpool":
+    def from_string(cls, console: str) -> "Zpool":
         lines = console.strip().splitlines()
         name = _match(lines.pop(0), r"(?P<name>.+?)\s\d").get("name")
 

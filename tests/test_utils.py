@@ -2,7 +2,7 @@
 
 import typing as t
 
-from ward import test, xfail, raises
+from ward import test, raises
 
 from tests.conftest import test_data
 from cazier.zfs.plugins.modules.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
@@ -11,13 +11,13 @@ for item in test_data()("utils"):
 
     @test("parsing zpool list: {name}")  # type: ignore[misc]
     def _(console: str = item["console"], _list: dict[str, t.Any] = item["list"], name: str = item["name"]) -> None:
-        assert Zpool.parse_console(console).dump() == _list
+        assert Zpool.from_string(console).dump() == _list
 
 
 @test("parsing failures")  # type: ignore[misc]
 def _() -> None:
     with raises(TypeError) as exception:
-        Zpool.parse_console(
+        Zpool.from_string(
             """
 test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
 	/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
@@ -32,7 +32,7 @@ for item in test_data()("utils"):
 
     @test("zpool create command: {name}")  # type: ignore[misc]
     def _(console: str = item["console"], create: str = item["create"], name: str = item["name"]) -> None:
-        assert " ".join(Zpool.parse_console(console).create_command()) == create
+        assert " ".join(Zpool.from_string(console).create_command()) == create
 
 
 @test("vdevs")  # type: ignore[misc]
@@ -57,6 +57,18 @@ def _() -> None:
     a.type = "raidz1"
     assert a != b
 
+    # Equality from non-identical types
+    assert a.dump() == a
+    assert a != {"disks": 0}
+
+    assert a.load(a.dump()) == a
+
+    assert b == ["drive0.raw", "drive1.raw"]
+    assert b == {"drive0.raw", "drive1.raw"}
+    assert b == ("drive0.raw", "drive1.raw")
+
+    assert a != object()
+
     a.clear()
     assert a == Vdev()
     assert a.dump() == {"disks": []}
@@ -68,16 +80,12 @@ def _() -> None:
 
     assert c.creation() == ["raidz1", "drive0.raw", "drive1.raw", "drive2.raw"]
 
-
-@xfail
-@test("vdevs: todo")  # type: ignore[misc]
-def _() -> None:
-    a = Vdev(["drive0.raw", "drive1.raw"])
-
-    assert a.dump() == a
+    with raises(TypeError) as expected:
+        Vdev(disks=0)  # type: ignore[arg-type]
+    assert "A Vdev must have an iterable as the disks argument." in str(expected.raised)
 
 
-@test("pools: generic and redundant")  # type: ignore[misc]
+@test("pools: generic")  # type: ignore[misc]
 def _() -> None:
     a = _Pool()
     b = _Pool()
@@ -91,7 +99,7 @@ def _() -> None:
 
     assert a
     assert a != b
-    assert a.dump() == [{"disks": ["drive0.raw"]}]
+    assert a.dump() == {"": [{"disks": ["drive0.raw"]}]}
 
     vdev2 = b.new()
     vdev2.append("drive1.raw", "drive0.raw")
@@ -106,17 +114,77 @@ def _() -> None:
     assert vdev in a
     assert vdev2 in a
 
-    storage = StoragePool(vdevs=[Vdev(["drive0.raw", "drive1.raw", "drive2.raw"], type="raidz1")])
-    assert storage.creation() == ["raidz1", "drive0.raw", "drive1.raw", "drive2.raw"]
+
+@test("pools: redundant")  # type: ignore[misc]
+def _() -> None:
+    storage = StoragePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
+    assert storage.creation() == ["raidz1", "drive0.raw", "drive1.raw"]
     storage._check_redundancy(Vdev([], type=None))
 
+    vdev3 = storage.new()
+    vdev3.append("drive10.raw", "drive11.raw")
+    assert vdev3.type == "stripe"
+
+    # Equality from non-identical types
+    assert storage.dump() == storage
+    assert storage != {"storage": 0}
+    assert storage == {
+        "storage": [
+            {"disks": ["drive0.raw", "drive1.raw"], "type": "raidz1"},
+            {"disks": ["drive10.raw", "drive11.raw"], "type": "stripe"},
+        ]
+    }
+
+    assert storage == [
+        {"disks": ["drive0.raw", "drive1.raw"], "type": "raidz1"},
+        {"disks": ["drive10.raw", "drive11.raw"], "type": "stripe"},
+    ]
+    assert storage == (
+        {"disks": ["drive0.raw", "drive1.raw"], "type": "raidz1"},
+        {"disks": ["drive10.raw", "drive11.raw"], "type": "stripe"},
+    )
+
+    assert storage.load(storage.dump()) == storage
+
+    assert storage != object()
+
+    vdev4 = storage.new("raidz3")
+    vdev4.append("drive20.raw")
+    assert vdev4.type == "raidz3"
+
+    assert storage.dump() == {
+        "storage": [
+            {"disks": ["drive0.raw", "drive1.raw"], "type": "raidz1"},
+            {"disks": ["drive10.raw", "drive11.raw"], "type": "stripe"},
+            {"disks": ["drive20.raw"], "type": "raidz3"},
+        ],
+    }
+
+    assert storage.load(storage.dump()) == storage
     assert all(vdev.type is not None for vdev in storage.vdevs)
 
     log = LogPool(vdevs=[Vdev(["drive0.raw", "drive1.raw"])])
-    assert log.dump() == [{"disks": ["drive0.raw", "drive1.raw"], "type": "stripe"}]
+    assert log.dump() == {"logs": [{"disks": ["drive0.raw", "drive1.raw"], "type": "stripe"}]}
     assert log.creation() == ["log", "drive0.raw", "drive1.raw"]
 
+    assert log.load(log.dump()) == log
     assert all(vdev.type is not None for vdev in log.vdevs)
+
+    with raises(TypeError) as expected:
+        _Pool([{"disks": ["drive0.raw"]}])  # type: ignore[list-item]
+    assert "A _Pool cannot be initialized with non-Vdevs. Use .load() to create from a" in str(expected.raised)
+
+    with raises(TypeError) as expected:
+        _Pool.load({})
+    assert "Could not create a _Pool from this input data: The input data has no pools." in str(expected.raised)
+
+    with raises(TypeError) as expected:
+        StoragePool.load({"storage": [], "log": []})
+    assert "Could not create a StoragePool from this input data: There were too many pools." in str(expected.raised)
+
+    with raises(AttributeError) as expected:  # type: ignore[assignment]
+        _Pool.load({"Invalid Pool Type": []})
+    assert "Could not find the requested pool type in the module." in str(expected.raised)
 
 
 @test("pools: non-redundant")  # type: ignore[misc]
@@ -137,11 +205,13 @@ def _() -> None:
         CachePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
     assert "Non-redundant pools (i.e., class: CachePool) cannot have a type argument." in str(exception.raised)
 
+    assert cache.load(cache.dump()) == cache
     assert all(vdev.type is None for vdev in cache.vdevs)
 
     spare = SparePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"])])
     assert spare.creation() == ["spare", "drive0.raw", "drive1.raw"]
 
+    assert spare.load(spare.dump()) == spare
     assert all(vdev.type is None for vdev in spare.vdevs)
 
     with raises(ValueError) as exception:
@@ -155,14 +225,6 @@ def _() -> None:
     with raises(ValueError) as exception:
         SparePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
     assert "Non-redundant pools (i.e., class: SparePool) cannot have a type argument." in str(exception.raised)
-
-
-@xfail
-@test("pools: todo")  # type: ignore[misc]
-def _() -> None:
-    a = _Pool([Vdev(["drive0.raw", "drive1.raw"])])
-
-    assert a.dump() == a
 
 
 @test("diffs")  # type: ignore[misc]
