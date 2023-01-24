@@ -1,4 +1,4 @@
-test_zpool:
+utils:
   - name: striped storage pool
     console: |
       test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
