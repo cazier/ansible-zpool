@@ -236,7 +236,7 @@ class _Pool:
         return any(bool(vdev) for vdev in self.vdevs)
 
     def __sub__(self, other: "_Pool") -> set[Vdev]:
-        if type(self) != type(other):  # pylint: disable=unidiomatic-typecheck
+        if not isinstance(other, type(self)):
             raise ValueError("Diffing of different pool types is not supported.")
 
         return set(self.vdevs).difference(other.vdevs)
