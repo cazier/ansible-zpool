@@ -9,9 +9,9 @@ readme: README.md
 description: A minimal (and probably slightly dangerous) collection to interact with, create, configure, destroy, etc. ZFS zpools
 license_file: 'LICENSE'
 
-repository: https://github.com/cazier/zpool_collections
-documentation: https://github.com/cazier/zpool_collections
-homepage: https://github.com/cazier/zpool_collections
+repository: https://github.com/cazier/ansible-zpool
+documentation: https://github.com/cazier/ansible-zpool
+homepage: https://github.com/cazier/ansible-zpool
 issues: http://example.com/issue/tracker
 
 tags:
