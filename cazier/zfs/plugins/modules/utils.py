@@ -309,7 +309,7 @@ class _Pool:
 
         [[_type, disks]] = keys
 
-        return _find_pool(_type)([Vdev.load(disk) for disk in disks])  # pylint: disable=not-callable
+        return _find_pool(_type)([Vdev.load(disk) for disk in disks])
 
 
 @dataclasses.dataclass(eq=False)
@@ -355,10 +355,10 @@ class SparePool(_Pool):
     name: str = dataclasses.field(default="spare", init=False)
 
 
-def _find_pool(_type: str) -> t.Type[_PoolsHint]:
+def _find_pool(_type: str) -> type[_PoolsHint]:
     try:
         return t.cast(
-            t.Type[_PoolsHint], {"storage": StoragePool, "logs": LogPool, "cache": CachePool, "spare": SparePool}[_type]
+            type[_PoolsHint], {"storage": StoragePool, "logs": LogPool, "cache": CachePool, "spare": SparePool}[_type]
         )
 
     except KeyError as exception:
