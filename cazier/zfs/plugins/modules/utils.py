@@ -309,7 +309,7 @@ class _Pool:
 
         [[_type, disks]] = keys
 
-        return get_pool(_type)([Vdev.load(disk) for disk in disks])  # pylint: disable=not-callable
+        return _find_pool(_type)([Vdev.load(disk) for disk in disks])  # pylint: disable=not-callable
 
 
 @dataclasses.dataclass(eq=False)
@@ -355,23 +355,14 @@ class SparePool(_Pool):
     name: str = dataclasses.field(default="spare", init=False)
 
 
-def get_pool(_type: str) -> t.Type[_PoolsHint]:
-    # FIXME: I don't like this... Isn't there a module level getattr()?
-    match _type:
-        case "storage":
-            return StoragePool
+def _find_pool(_type: str) -> t.Type[_PoolsHint]:
+    try:
+        return t.cast(
+            t.Type[_PoolsHint], {"storage": StoragePool, "logs": LogPool, "cache": CachePool, "spare": SparePool}[_type]
+        )
 
-        case "logs":
-            return LogPool
-
-        case "cache":
-            return CachePool
-
-        case "spare":
-            return SparePool
-
-        case _:
-            raise AttributeError("Could not find the requested pool type in the module.")
+    except KeyError as exception:
+        raise AttributeError("Could not find the requested pool type in the module.") from exception
 
 
 @dataclasses.dataclass
@@ -382,15 +373,15 @@ class Zpool:
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
 
-    def get_pool(self, name: str | dataclasses.Field[_Pool]) -> _PoolsHint:
-        if isinstance(name, dataclasses.Field):
-            name = name.name
+    def __bool__(self) -> bool:
+        return any(bool(p) for p in self.pools)
 
+    def get_pool(self, name: str) -> _PoolsHint:
         return t.cast(_PoolsHint, getattr(self, name))
 
     @property
     def pools(self) -> t.Iterator[dataclasses.Field[_Pool]]:
-        yield from (field for field in dataclasses.fields(self) if field.metadata.get("dump", True))
+        yield from map(self.get_pool, self.names)
 
     @property
     def names(self) -> t.Iterator[str]:
@@ -408,7 +399,7 @@ class Zpool:
     @classmethod
     def from_string(cls, console: str) -> "Zpool":
         lines = console.strip().splitlines()
-        name = _match(lines.pop(0), r"(?P<name>.+?)\s\d").get("name")
+        name = _match(lines.pop(0), r"^(?P<name>.+?)\s\d").get("name")
 
         if not name:
             raise ValueError("Could not match a zpool name from the console text.")
@@ -447,6 +438,17 @@ class Zpool:
                 if (_type := _get_type(future)) or future == "<terminator>":
                     if isinstance(pool, _Redundant):
                         vdev = pool.new()
+
+        return zpool
+
+    @classmethod
+    def from_dict(cls, data: _ZpoolHint) -> "Zpool":
+        zpool = cls(t.cast(str, data["name"]))
+
+        for key in zpool.names:
+            for vdev in t.cast(list[_VdevHint], data.get(key, {})):
+                _vdev = zpool.get_pool(key).new(t.cast(t.Optional[str], vdev.get("type")))
+                _vdev.append(*vdev.get("disks", []))
 
         return zpool
 

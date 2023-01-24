@@ -16,7 +16,7 @@ for item in test_data()("utils"):
 
 @test("parsing failures")  # type: ignore[misc]
 def _() -> None:
-    with raises(TypeError) as exception:
+    with raises(TypeError) as expected:
         Zpool.from_string(
             """
 test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
@@ -25,7 +25,35 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
 	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part2	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
 """
         )
-    assert "Only using whole disk (or sparse images) is supported" in str(exception.raised)
+    assert "Only using whole disk (or sparse images) is supported" in str(expected.raised)
+
+    with raises(ValueError) as expected:  # type: ignore[assignment]
+        Zpool.from_string(
+            """
+test
+	/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
+	/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+"""
+        )
+    assert "Could not match a zpool name from the console text." in str(expected.raised)
+
+    with raises(TypeError) as expected:
+        Zpool.from_string(
+            """
+test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
+	exception	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
+	error	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+	failure	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+"""
+        )
+    assert "Couldn't parse the zpool list data properly." in str(expected.raised)
+
+
+for item in test_data()("utils"):
+
+    @test("parsing data dicts: {name}")  # type: ignore[misc]
+    def _(_list: dict[str, t.Any] = item["list"], name: str = item["name"]) -> None:
+        assert Zpool.from_dict(_list).dump() == _list
 
 
 for item in test_data()("utils"):
@@ -193,17 +221,17 @@ def _() -> None:
     assert cache.creation() == ["cache", "drive0.raw", "drive1.raw"]
     cache._check_redundancy(Vdev(["drive2.raw"]))
 
-    with raises(ValueError) as exception:
+    with raises(ValueError) as expected:
         cache.append(Vdev(["drive2.raw"]))
-    assert "Cannot add new vdevs to a CachePool. The existing vdev can only be extended." in str(exception.raised)
+    assert "Cannot add new vdevs to a CachePool. The existing vdev can only be extended." in str(expected.raised)
 
     cache.extend("drive2.raw")
     cache.extend(Vdev(["drive3.raw"]))
     assert cache.creation() == ["cache", "drive0.raw", "drive1.raw", "drive2.raw", "drive3.raw"]
 
-    with raises(ValueError) as exception:
+    with raises(ValueError) as expected:
         CachePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
-    assert "Non-redundant pools (i.e., class: CachePool) cannot have a type argument." in str(exception.raised)
+    assert "Non-redundant pools (i.e., class: CachePool) cannot have a type argument." in str(expected.raised)
 
     assert cache.load(cache.dump()) == cache
     assert all(vdev.type is None for vdev in cache.vdevs)
@@ -214,17 +242,17 @@ def _() -> None:
     assert spare.load(spare.dump()) == spare
     assert all(vdev.type is None for vdev in spare.vdevs)
 
-    with raises(ValueError) as exception:
+    with raises(ValueError) as expected:
         spare.append(Vdev(["drive2.raw"]))
-    assert "Cannot add new vdevs to a SparePool. The existing vdev can only be extended." in str(exception.raised)
+    assert "Cannot add new vdevs to a SparePool. The existing vdev can only be extended." in str(expected.raised)
 
     spare.extend("drive2.raw")
     spare.extend(Vdev(["drive3.raw"]))
     assert spare.creation() == ["spare", "drive0.raw", "drive1.raw", "drive2.raw", "drive3.raw"]
 
-    with raises(ValueError) as exception:
+    with raises(ValueError) as expected:
         SparePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
-    assert "Non-redundant pools (i.e., class: SparePool) cannot have a type argument." in str(exception.raised)
+    assert "Non-redundant pools (i.e., class: SparePool) cannot have a type argument." in str(expected.raised)
 
 
 @test("diffs")  # type: ignore[misc]
@@ -275,3 +303,22 @@ def _() -> None:
     with raises(ValueError) as expected:
         _ = StoragePool() ^ _Pool()
     assert "Diffing of different pool types is not supported." in str(expected.raised)
+
+
+@test("zpools")  # type: ignore[misc]
+def _() -> None:
+    a = Zpool("a")
+    b = Zpool("a")
+
+    assert a == b
+    assert not a
+
+    v = a.storage.new("raidz1")
+    v.append("drive0.raw", "drive1.raw", "drive2.raw")
+
+    assert a != b
+
+    b = Zpool.from_dict(a.dump())
+    b.storage.vdevs[0].disks.reverse()
+
+    assert a == b
