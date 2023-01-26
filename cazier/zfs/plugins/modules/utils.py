@@ -123,7 +123,7 @@ class Vdev:
         if isinstance(__o, (list, set, tuple)):
             __o = Vdev(disks=list(__o))
 
-        elif not isinstance(__o, self.__class__):
+        if not isinstance(__o, type(self)):
             return False
 
         if self.type != __o.type:
@@ -221,7 +221,7 @@ class _Pool:
         if isinstance(__o, (list, tuple)):
             __o = self.load({self.name: list(__o)})
 
-        elif not isinstance(__o, self.__class__):
+        if not isinstance(__o, type(self)):
             return False
 
         if set(self.vdevs) != set(__o.vdevs):
@@ -249,6 +249,10 @@ class _Pool:
 
     def symmetric_difference(self, other: "_Pool") -> set[Vdev]:
         return self ^ other
+
+    @property
+    def devices(self) -> set[str]:
+        return {disk for vdev in self.vdevs for disk in vdev.disks}
 
     def _append(self, *items: Vdev) -> None:
         self._check_redundancy(*items)
@@ -376,11 +380,18 @@ class Zpool:
     def __bool__(self) -> bool:
         return any(bool(p) for p in self.pools)
 
+    def __iter__(self) -> t.Iterator[tuple[str, _Pool]]:
+        yield from zip(self.names, self.pools)
+
+    @property
+    def devices(self) -> set[str]:
+        return {disk for pool in self.pools for disk in pool.devices}
+
     def get_pool(self, name: str) -> _PoolsHint:
         return t.cast(_PoolsHint, getattr(self, name))
 
     @property
-    def pools(self) -> t.Iterator[dataclasses.Field[_Pool]]:
+    def pools(self) -> t.Iterator[_Pool]:
         yield from map(self.get_pool, self.names)
 
     @property

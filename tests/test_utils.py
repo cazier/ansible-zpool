@@ -191,6 +191,8 @@ def _() -> None:
     assert storage.load(storage.dump()) == storage
     assert all(vdev.type is not None for vdev in storage.vdevs)
 
+    assert storage.devices == {"drive0.raw", "drive1.raw", "drive10.raw", "drive11.raw", "drive20.raw"}
+
     log = LogPool(vdevs=[Vdev(["drive0.raw", "drive1.raw"])])
     assert log.dump() == {"logs": [{"disks": ["drive0.raw", "drive1.raw"], "type": "stripe"}]}
     assert log.creation() == ["log", "drive0.raw", "drive1.raw"]
@@ -310,6 +312,20 @@ def _() -> None:
     a = Zpool("a")
     b = Zpool("a")
 
+    assert not a
+
+    assert list(a.names) == ["storage", "logs", "cache", "spare"]
+    assert list(map(id, a.pools)) == [id(a.storage), id(a.logs), id(a.cache), id(a.spare)]
+
+    assert list(map(lambda k: (k[0], id(k[1])), iter(a))) == [
+        ("storage", id(a.storage)),
+        ("logs", id(a.logs)),
+        ("cache", id(a.cache)),
+        ("spare", id(a.spare)),
+    ]
+
+    assert id(a.get_pool("storage")) == id(a.storage)
+
     assert a == b
     assert not a
 
@@ -322,3 +338,19 @@ def _() -> None:
     b.storage.vdevs[0].disks.reverse()
 
     assert a == b
+
+    b.spare.append(Vdev(disks=["drive3.raw"]))
+    b.logs.append(Vdev(disks=["drive4.raw", "drive5.raw", "drive6.raw", "drive7.raw"], type="mirror"))
+
+    assert b.devices == {
+        "drive0.raw",
+        "drive1.raw",
+        "drive2.raw",
+        "drive3.raw",
+        "drive4.raw",
+        "drive5.raw",
+        "drive6.raw",
+        "drive7.raw",
+    }
+
+
