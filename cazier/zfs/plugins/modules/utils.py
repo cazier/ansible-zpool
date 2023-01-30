@@ -123,7 +123,7 @@ class Vdev:
         if isinstance(__o, (list, set, tuple)):
             __o = Vdev(disks=list(__o))
 
-        elif not isinstance(__o, self.__class__):
+        if not isinstance(__o, type(self)):
             return False
 
         if self.type != __o.type:
@@ -221,7 +221,7 @@ class _Pool:
         if isinstance(__o, (list, tuple)):
             __o = self.load({self.name: list(__o)})
 
-        elif not isinstance(__o, self.__class__):
+        if not isinstance(__o, type(self)):
             return False
 
         if set(self.vdevs) != set(__o.vdevs):
@@ -236,7 +236,7 @@ class _Pool:
         return any(bool(vdev) for vdev in self.vdevs)
 
     def __sub__(self, other: "_Pool") -> set[Vdev]:
-        if type(self) != type(other):  # pylint: disable=unidiomatic-typecheck
+        if not isinstance(other, type(self)):
             raise ValueError("Diffing of different pool types is not supported.")
 
         return set(self.vdevs).difference(other.vdevs)
@@ -249,6 +249,10 @@ class _Pool:
 
     def symmetric_difference(self, other: "_Pool") -> set[Vdev]:
         return self ^ other
+
+    @property
+    def devices(self) -> set[str]:
+        return {disk for vdev in self.vdevs for disk in vdev.disks}
 
     def _append(self, *items: Vdev) -> None:
         self._check_redundancy(*items)
@@ -309,7 +313,7 @@ class _Pool:
 
         [[_type, disks]] = keys
 
-        return _find_pool(_type)([Vdev.load(disk) for disk in disks])  # pylint: disable=not-callable
+        return _find_pool(_type)([Vdev.load(disk) for disk in disks])
 
 
 @dataclasses.dataclass(eq=False)
@@ -355,10 +359,10 @@ class SparePool(_Pool):
     name: str = dataclasses.field(default="spare", init=False)
 
 
-def _find_pool(_type: str) -> t.Type[_PoolsHint]:
+def _find_pool(_type: str) -> type[_PoolsHint]:
     try:
         return t.cast(
-            t.Type[_PoolsHint], {"storage": StoragePool, "logs": LogPool, "cache": CachePool, "spare": SparePool}[_type]
+            type[_PoolsHint], {"storage": StoragePool, "logs": LogPool, "cache": CachePool, "spare": SparePool}[_type]
         )
 
     except KeyError as exception:
@@ -373,14 +377,55 @@ class Zpool:
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
 
+    def __post_init__(self) -> None:
+        self._sanitize()
+
     def __bool__(self) -> bool:
         return any(bool(p) for p in self.pools)
+
+    def __iter__(self) -> t.Iterator[tuple[str, _Pool]]:
+        yield from zip(self.names, self.pools)
+
+    def _sanitize(self) -> None:
+        for pool in self.pools:
+            pool.vdevs = [vdev for vdev in pool.vdevs if vdev]
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, dict):
+            try:
+                __o = self.from_dict(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        elif isinstance(__o, str):
+            try:
+                __o = self.from_string(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if not isinstance(__o, type(self)):
+            return False
+
+        if self.name != __o.name:
+            return False
+
+        for name in self.names:
+            if self.get_pool(name) != __o.get_pool(name):
+                return False
+
+        return True
+
+    @property
+    def devices(self) -> set[str]:
+        return {disk for pool in self.pools for disk in pool.devices}
 
     def get_pool(self, name: str) -> _PoolsHint:
         return t.cast(_PoolsHint, getattr(self, name))
 
     @property
-    def pools(self) -> t.Iterator[dataclasses.Field[_Pool]]:
+    def pools(self) -> t.Iterator[_Pool]:
         yield from map(self.get_pool, self.names)
 
     @property
@@ -439,6 +484,7 @@ class Zpool:
                     if isinstance(pool, _Redundant):
                         vdev = pool.new()
 
+        zpool._sanitize()
         return zpool
 
     @classmethod
@@ -450,6 +496,7 @@ class Zpool:
                 _vdev = zpool.get_pool(key).new(t.cast(t.Optional[str], vdev.get("type")))
                 _vdev.append(*vdev.get("disks", []))
 
+        zpool._sanitize()
         return zpool
 
     def create_command(self) -> list[str]:
