@@ -377,11 +377,45 @@ class Zpool:
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
 
+    def __post_init__(self) -> None:
+        self._sanitize()
+
     def __bool__(self) -> bool:
         return any(bool(p) for p in self.pools)
 
     def __iter__(self) -> t.Iterator[tuple[str, _Pool]]:
         yield from zip(self.names, self.pools)
+
+    def _sanitize(self) -> None:
+        for pool in self.pools:
+            pool.vdevs = [vdev for vdev in pool.vdevs if vdev]
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, dict):
+            try:
+                __o = self.from_dict(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        elif isinstance(__o, str):
+            try:
+                __o = self.from_string(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if not isinstance(__o, type(self)):
+            return False
+
+        if self.name != __o.name:
+            return False
+
+        for name in self.names:
+            if self.get_pool(name) != __o.get_pool(name):
+                return False
+
+        return True
 
     @property
     def devices(self) -> set[str]:
@@ -450,6 +484,7 @@ class Zpool:
                     if isinstance(pool, _Redundant):
                         vdev = pool.new()
 
+        zpool._sanitize()
         return zpool
 
     @classmethod
@@ -461,6 +496,7 @@ class Zpool:
                 _vdev = zpool.get_pool(key).new(t.cast(t.Optional[str], vdev.get("type")))
                 _vdev.append(*vdev.get("disks", []))
 
+        zpool._sanitize()
         return zpool
 
     def create_command(self) -> list[str]:

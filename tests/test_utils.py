@@ -353,4 +353,26 @@ def _() -> None:
         "drive7.raw",
     }
 
+    string = """
+test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
+\t/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
+\t/dev/disk/by-id/scsi-SATA_SN9300G_SERIAL-part1	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+\t/tmp/03.raw	9.08T	137K	9.08T	-	-	0%	0.00%	-	ONLINE
+"""
+    c = Zpool.from_string(string)
 
+    assert c == c.dump()
+    assert c != {}
+
+    assert c == string
+    assert c != ""
+
+    assert c != object()
+
+    d = Zpool.from_dict(c.dump())
+    d.spare.new().append("spare.raw")
+
+    assert c != d
+
+    d.name = "d"
+    assert c != d
