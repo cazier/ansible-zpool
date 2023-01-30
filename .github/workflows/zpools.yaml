@@ -1,0 +1,25 @@
+name: Zpool testing
+on:
+  push:
+    branches:
+      - main
+      - actions-test
+
+jobs:
+  zpools:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: /tmp
+
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          sudo apt update
+          sudo apt install -y zfsutils-linux
+      - run: /sbin/modprobe zfs
+      - name: Create sparse image files
+        run: |
+          for i in {01..20}; do truncate -s 9300G $i.raw; done
+
+      # Steps for the actual ansible tests
