@@ -48,6 +48,14 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
         )
     assert "Couldn't parse the zpool list data properly." in str(expected.raised)
 
+    with raises(ValueError) as expected:  # type: ignore[assignment]
+        Zpool.from_string(
+            """
+cannot open 'failure': no such pool
+"""
+        )
+    assert "There was no pool found with the name failure." in str(expected.raised)
+
 
 for item in test_data()("utils"):
 
