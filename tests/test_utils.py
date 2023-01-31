@@ -5,7 +5,7 @@ import typing as t
 from ward import test, raises
 
 from tests.conftest import test_data
-from cazier.zfs.plugins.modules.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
+from cazier.zfs.plugins.module_utils.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
 
 for item in test_data()("utils"):
 
