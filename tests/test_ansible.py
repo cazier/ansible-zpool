@@ -9,34 +9,6 @@ import subprocess
 import yaml
 from ward import Scope, test, fixture
 
-from tests.conftest import test_data
-
-STEPS = yaml.safe_load(
-    """
-- name: test my new module
-  hosts: all
-  tasks:
-  - name: run the new module
-    become: true
-    cazier.zfs.zpool:
-      name: test
-      zpool:
-        storage:
-        - disks:
-          - /tmp/01.raw
-          - /tmp/02.raw
-          - /tmp/03.raw
-          type: raidz1
-        - disks:
-          - /tmp/04.raw
-          - /tmp/05.raw
-          - /tmp/06.raw
-          type: raidz1
-      state: present
-    register: testout
-"""
-)
-
 
 @fixture(scope=Scope.Module)  # type: ignore[misc]
 def rootdir() -> t.Iterator[pathlib.Path]:
@@ -71,28 +43,50 @@ def ansibledir() -> t.Iterator[pathlib.Path]:
         yield directory
 
 
-for item in test_data()("integration")[:1]:
+@fixture(scope=Scope.Module)  # type: ignore[misc]
+def test_data() -> dict[str, t.Any]:
+    inputs = pathlib.Path(__file__).parent.joinpath("config", "integration.yaml").read_text(encoding="utf8")
+
+    return t.cast(dict[str, t.Any], yaml.safe_load(inputs)["integration"])
+
+
+def _exists(name: str) -> bool:
+    out = subprocess.run(["zpool", "list", name], check=False)
+
+    return out.returncode == 0 and (out.stderr is None or "no such pool" not in out.stderr.decode(encoding="utf8"))
+
+
+for item in test_data():
 
     @test("integration", tags=["ansible"])  # type: ignore[misc]
     def _(
-        root: pathlib.Path = rootdir, ansible: pathlib.Path = ansibledir, data: t.Any = item, name: str = item["name"]
+        sparse_files: pathlib.Path = rootdir,
+        ansible: pathlib.Path = ansibledir,
+        data: t.Any = item,
+        name: str = item["name"],
     ) -> None:
         inputs = data["inputs"]
         result = data["result"]
 
         playbook = ansible.joinpath("test_playbook.yaml")
-        playbook.write_text(yaml.dump(STEPS), encoding="utf8")
+        playbook.write_text(yaml.dump(inputs).replace("<__PATH__>", str(sparse_files)), encoding="utf8")
 
         out = subprocess.run(
             ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local"],
-            cwd=ansible,
             capture_output=True,
+            check=False,
+            cwd=ansible,
         )
-        print("=" * 80)
-        if out.stdout:
-            print(out.stdout.decode("utf8"))
-        print("=" * 80)
-        if out.stderr:
-            print(out.stderr.decode("utf8"))
-        print("=" * 80)
-        assert out.stdout.decode("utf8") == ""
+
+        if out.returncode != 0:
+            if out.stdout:
+                print('=' * 80, 'stdout')
+                print(out.stdout.decode('utf8'))
+            
+            if out.stderr:
+                print('=' * 80, 'stderr')
+                print(out.stderr.decode('utf8'))
+            
+            assert False
+
+        assert result["exists"] and _exists("test")

@@ -1,40 +1,52 @@
 integration:
   - name: create
     inputs:
-      name: test
-      zpool:
-        storage:
-          - type: raidz1
-            disks:
-              - /tmp/01.raw
-              - /tmp/02.raw
-              - /tmp/03.raw
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: create
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
 
-          - type: raidz1
-            disks:
-              - /tmp/04.raw
-              - /tmp/05.raw
-              - /tmp/06.raw
-      state: present
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+              state: present
     result:
       exists: true
 
   - name: destroy
     inputs:
-      name: test
-      zpool:
-        storage:
-          - type: raidz1
-            disks:
-              - /tmp/01.raw
-              - /tmp/02.raw
-              - /tmp/03.raw
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: destroy
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
 
-          - type: raidz1
-            disks:
-              - /tmp/04.raw
-              - /tmp/05.raw
-              - /tmp/06.raw
-      state: absent
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+              state: absent
     result:
       exists: false
