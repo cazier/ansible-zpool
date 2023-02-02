@@ -2,7 +2,7 @@
 
 import os
 import typing as t
-import pathlib
+import pathlib as p
 import tempfile
 import subprocess
 
@@ -11,9 +11,9 @@ from ward import Scope, test, fixture
 
 
 @fixture(scope=Scope.Module)  # type: ignore[misc]
-def rootdir() -> t.Iterator[pathlib.Path]:
+def rootdir() -> t.Iterator[p.Path]:
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = pathlib.Path(tmpdir)
+        path = p.Path(tmpdir)
 
         for file in range(1, 21):
             sparse = path.joinpath(f"{file:02d}.raw")
@@ -23,13 +23,13 @@ def rootdir() -> t.Iterator[pathlib.Path]:
 
 
 @fixture(scope=Scope.Module)  # type: ignore[misc]
-def ansibledir() -> t.Iterator[pathlib.Path]:
+def ansibledir() -> t.Iterator[p.Path]:
     with tempfile.TemporaryDirectory() as tmpdir:
-        directory = pathlib.Path(tmpdir)
+        directory = p.Path(tmpdir)
         collections = directory.joinpath("collections/ansible_collections")
 
         collections.mkdir(parents=True, exist_ok=True)
-        collections.joinpath("cazier").symlink_to(pathlib.Path("cazier").absolute(), target_is_directory=True)
+        collections.joinpath("cazier").symlink_to(p.Path("cazier").absolute(), target_is_directory=True)
 
         directory.joinpath("inventory.cfg").write_text("[test_device]\nlocalhost\n", encoding="utf8")
 
@@ -45,7 +45,7 @@ def ansibledir() -> t.Iterator[pathlib.Path]:
 
 @fixture(scope=Scope.Module)  # type: ignore[misc]
 def test_data() -> dict[str, t.Any]:
-    inputs = pathlib.Path(__file__).parent.joinpath("config", "integration.yaml").read_text(encoding="utf8")
+    inputs = p.Path(__file__).parent.joinpath("config", "integration.yaml").read_text(encoding="utf8")
 
     return t.cast(dict[str, t.Any], yaml.safe_load(inputs)["integration"])
 
@@ -58,18 +58,13 @@ def _exists(name: str) -> bool:
 
 for item in test_data():
 
-    @test("integration", tags=["ansible"])  # type: ignore[misc]
-    def _(
-        sparse_files: pathlib.Path = rootdir,
-        ansible: pathlib.Path = ansibledir,
-        data: t.Any = item,
-        name: str = item["name"],
-    ) -> None:
+    @test("integration: {name}", tags=["ansible"])  # type: ignore[misc]
+    def _(sparse: p.Path = rootdir, ansible: p.Path = ansibledir, data: t.Any = item, name: str = item["name"]) -> None:
         inputs = data["inputs"]
         result = data["result"]
 
         playbook = ansible.joinpath("test_playbook.yaml")
-        playbook.write_text(yaml.dump(inputs).replace("<__PATH__>", str(sparse_files)), encoding="utf8")
+        playbook.write_text(yaml.dump(inputs).replace("<__PATH__>", str(sparse)), encoding="utf8")
 
         out = subprocess.run(
             ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local"],
@@ -78,15 +73,13 @@ for item in test_data():
             cwd=ansible,
         )
 
-        if out.returncode != 0:
-            if out.stdout:
-                print('=' * 80, 'stdout')
-                print(out.stdout.decode('utf8'))
-            
-            if out.stderr:
-                print('=' * 80, 'stderr')
-                print(out.stderr.decode('utf8'))
-            
-            assert False
+        if result["failure"]:
+            assert out.returncode != 0
 
-        assert result["exists"] and _exists("test")
+            if msg := result.get("message"):
+                assert out.stdout and msg in out.stdout.decode("utf8")
+
+        else:
+            assert out.returncode == 0
+
+        assert result["exists"] == _exists("test")
