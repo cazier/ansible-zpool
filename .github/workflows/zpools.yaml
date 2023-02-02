@@ -19,13 +19,9 @@ jobs:
           sudo apt install -y zfsutils-linux
       - run: |
           python -m pip install poetry
-          poetry install --only main
+          poetry install --only testing
       - run: /sbin/modprobe zfs
-      - name: Create sparse image files
-        working-directory: /tmp
-        run: |
-          for i in {01..20}; do truncate -s 9300G $i.raw; done
       - run: |
-          ansible --version
+          poetry run ward test -p tests --tags ansible
 
       # Steps for the actual ansible tests
