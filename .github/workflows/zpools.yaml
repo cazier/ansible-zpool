@@ -3,7 +3,12 @@ on:
   push:
     branches:
       - main
-      - ansible-start
+
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - review_requested
 
 jobs:
   zpools:
