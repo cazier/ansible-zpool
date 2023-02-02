@@ -32,8 +32,7 @@ STEPS = yaml.safe_load(
           - /tmp/05.raw
           - /tmp/06.raw
           type: raidz1
-      state: absent
-      force: true
+      state: present
     register: testout
 """
 )
@@ -62,7 +61,7 @@ def ansibledir() -> t.Iterator[pathlib.Path]:
 
         directory.joinpath("inventory.cfg").write_text("[test_device]\nlocalhost\n", encoding="utf8")
 
-        conf = f"[defaults]\ninventory = inventory.cfg\nremote_user = root\ncollections_paths = {collections.parent}"
+        conf = f"[defaults]\ninventory = inventory.cfg\ncollections_paths = {collections.parent}"
 
         config = directory.joinpath("ansible.cfg")
         config.write_text(conf, encoding="utf8")
@@ -84,6 +83,16 @@ for item in test_data()("integration")[:1]:
         playbook = ansible.joinpath("test_playbook.yaml")
         playbook.write_text(yaml.dump(STEPS), encoding="utf8")
 
-        out = subprocess.run(["ansible-playbook", str(playbook), "-l", "test_device", "-v"], cwd=ansible)
-        print(out.stdout or out.stderr)
+        out = subprocess.run(
+            ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local"],
+            cwd=ansible,
+            capture_output=True,
+        )
+        print("=" * 80)
+        if out.stdout:
+            print(out.stdout.decode("utf8"))
+        print("=" * 80)
+        if out.stderr:
+            print(out.stderr.decode("utf8"))
+        print("=" * 80)
         assert out.stdout.decode("utf8") == ""

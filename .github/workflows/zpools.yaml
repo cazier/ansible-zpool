@@ -17,11 +17,9 @@ jobs:
       - run: |
           sudo apt update
           sudo apt install -y zfsutils-linux
+          /sbin/modprobe zfs
       - run: |
           python -m pip install poetry
           poetry install --only testing
-      - run: /sbin/modprobe zfs
       - run: |
           poetry run ward test -p tests --tags ansible
-
-      # Steps for the actual ansible tests
