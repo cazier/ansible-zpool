@@ -1,0 +1,40 @@
+integration:
+  - name: create
+    inputs:
+      name: test
+      zpool:
+        storage:
+          - type: raidz1
+            disks:
+              - /tmp/01.raw
+              - /tmp/02.raw
+              - /tmp/03.raw
+
+          - type: raidz1
+            disks:
+              - /tmp/04.raw
+              - /tmp/05.raw
+              - /tmp/06.raw
+      state: present
+    result:
+      exists: true
+
+  - name: destroy
+    inputs:
+      name: test
+      zpool:
+        storage:
+          - type: raidz1
+            disks:
+              - /tmp/01.raw
+              - /tmp/02.raw
+              - /tmp/03.raw
+
+          - type: raidz1
+            disks:
+              - /tmp/04.raw
+              - /tmp/05.raw
+              - /tmp/06.raw
+      state: absent
+    result:
+      exists: false
