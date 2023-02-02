@@ -156,10 +156,7 @@ def main() -> None:
                 result["changed"] = True
 
             else:
-                module.fail_json(
-                    f"The zpool {zpool.name} exists, but cannot be destroyed without both "
-                    "the `force` and `absolutely_force` flags"
-                )
+                module.fail_json(f"The zpool {zpool.name} exists, but cannot be destroyed without the `force` flag")
 
     module.exit_json(**result)
 
