@@ -12,7 +12,6 @@ python = "^3.11"
 ansible-core = "^2.14.1"
 
 [tool.poetry.group.testing.dependencies]
-ansible-core = "^2.14.1"
 pyyaml = "^6.0"
 ward = "^0.67.0b0"
 
@@ -54,7 +53,6 @@ disable = "missing-module-docstring,missing-class-docstring,missing-function-doc
 
 [tool.mypy]
 strict = true
-mypy_path = "python"
 show_error_codes = true
 namespace_packages = true
 explicit_package_bases = true
