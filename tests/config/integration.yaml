@@ -1,0 +1,83 @@
+integration:
+  - name: create
+    inputs:
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: create
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
+
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+              state: present
+    result:
+      failure: false
+      exists: true
+
+  - name: destroy unsuccessfully
+    inputs:
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: destroy
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
+
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+              state: absent
+    result:
+      failure: true
+      message: The zpool test exists, but cannot be destroyed without the `force` flag
+      exists: true
+
+  - name: destroy successfully
+    inputs:
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: destroy
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
+
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+              state: absent
+              force: true
+    result:
+      failure: false
+      exists: false

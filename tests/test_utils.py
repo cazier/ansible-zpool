@@ -5,7 +5,7 @@ import typing as t
 from ward import test, raises
 
 from tests.conftest import test_data
-from cazier.zfs.plugins.modules.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
+from cazier.zfs.plugins.module_utils.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
 
 for item in test_data()("utils"):
 
@@ -47,6 +47,14 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
 """
         )
     assert "Couldn't parse the zpool list data properly." in str(expected.raised)
+
+    with raises(ValueError) as expected:  # type: ignore[assignment]
+        Zpool.from_string(
+            """
+cannot open 'failure': no such pool
+"""
+        )
+    assert "There was no pool found with the name failure." in str(expected.raised)
 
 
 for item in test_data()("utils"):

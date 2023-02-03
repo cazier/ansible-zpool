@@ -443,6 +443,9 @@ class Zpool:
 
     @classmethod
     def from_string(cls, console: str) -> "Zpool":
+        if search := re.search(r"cannot open '(.*?)': no such pool", console):
+            raise ValueError(f"There was no pool found with the name {search.group(1)}.")
+
         lines = console.strip().splitlines()
         name = _match(lines.pop(0), r"^(?P<name>.+?)\s\d").get("name")
 

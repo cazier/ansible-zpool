@@ -3,7 +3,7 @@
 from ward import test, raises
 
 from tests.conftest import test_data
-from cazier.zfs.plugins.modules.utils import _match, _pairs, _get_disk, _get_type
+from cazier.zfs.plugins.module_utils.utils import _match, _pairs, _get_disk, _get_type
 
 
 @test("utils: _pairs")  # type: ignore[misc]
