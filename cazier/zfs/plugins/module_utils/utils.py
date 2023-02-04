@@ -532,4 +532,7 @@ class Zpool:
         for pool in self.names:
             cmd.extend(self.get_pool(pool).creation())
 
+        for _property, option in self.options.items():
+            cmd.extend(("-o", f"{_property}={option.value}"))
+
         return cmd
