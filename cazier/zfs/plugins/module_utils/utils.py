@@ -5,7 +5,8 @@ import dataclasses
 
 _VdevHint = dict[str, str | list[str]]
 _PoolHint = dict[str, list[_VdevHint]]
-_ZpoolHint = dict[str, str | list[_VdevHint]]
+_OptionHint = dict[str, str]
+_ZpoolHint = dict[str, str | list[_VdevHint] | list[_OptionHint]]
 
 _PoolsHint = t.Union["StoragePool", "LogPool", "CachePool", "SparePool"]
 
@@ -370,12 +371,19 @@ def _find_pool(_type: str) -> type[_PoolsHint]:
 
 
 @dataclasses.dataclass
+class Option:
+    value: str
+    source: str
+
+
+@dataclasses.dataclass
 class Zpool:
     name: str = dataclasses.field(metadata={"dump": False})
     storage: StoragePool = dataclasses.field(default_factory=StoragePool)
     logs: LogPool = dataclasses.field(default_factory=LogPool)
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
+    options: dict[str, Option] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self._sanitize()
@@ -441,6 +449,13 @@ class Zpool:
 
         return data
 
+    def add_options(self, options: str) -> None:
+        pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
+
+        for name, _property, *data in pattern.findall(options):
+            if name == self.name:
+                self.options[_property] = Option(*data)
+
     @classmethod
     def from_string(cls, console: str) -> "Zpool":
         if search := re.search(r"cannot open '(.*?)': no such pool", console):
@@ -498,6 +513,9 @@ class Zpool:
             for vdev in t.cast(list[_VdevHint], data.get(key, {})):
                 _vdev = zpool.get_pool(key).new(t.cast(t.Optional[str], vdev.get("type")))
                 _vdev.append(*vdev.get("disks", []))
+
+        for option in t.cast(list[_OptionHint], data.get("options", [])):
+            zpool.options[option.pop("property")] = Option(**option)
 
         zpool._sanitize()
         return zpool
