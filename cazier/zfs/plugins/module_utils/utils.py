@@ -372,13 +372,44 @@ def _find_pool(_type: str) -> type[_PoolsHint]:
 
 @dataclasses.dataclass
 class Option:
+    property: str
     value: str
-    source: str
+    source: str = "-"
+
+    @classmethod
+    def load(cls, data: _OptionHint) -> "Option":
+        if _property := data.get("property"):
+            option = cls(**data)
+
+        else:
+            [(_property, value)] = data.items()
+            option = cls(_property, value)
+
+        return option
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, dict):
+            try:
+                __o = self.load(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if not isinstance(__o, type(self)):
+            return False
+
+        return self.property == __o.property and self.value == __o.value
+
+    def dump(self) -> _OptionHint:
+        return dataclasses.asdict(self)
+
+    def create(self) -> list[str]:
+        return ["-o", f"{self.property}={self.value}"]
 
 
 @dataclasses.dataclass
 class Zpool:
-    name: str = dataclasses.field(metadata={"dump": False})
+    name: str
     storage: StoragePool = dataclasses.field(default_factory=StoragePool)
     logs: LogPool = dataclasses.field(default_factory=LogPool)
     cache: CachePool = dataclasses.field(default_factory=CachePool)
@@ -438,7 +469,7 @@ class Zpool:
 
     @property
     def names(self) -> t.Iterator[str]:
-        yield from (field.name for field in dataclasses.fields(self) if field.metadata.get("dump", True))
+        yield from (field.name for field in dataclasses.fields(self) if issubclass(field.type, _Pool))
 
     def dump(self) -> _ZpoolHint:
         data: _ZpoolHint = {"name": self.name}
@@ -447,17 +478,25 @@ class Zpool:
             if pool := self.get_pool(pool_type):
                 data[pool_type] = pool.dump()[pool_type]
 
+        if self.options:
+            options: list[dict[str, str]] = []
+
+            for option in self.options.values():
+                options.append(option.dump())
+
+            data["options"] = options
+
         return data
 
-    def add_options(self, options: str) -> None:
+    def add_option_string(self, options: str) -> None:
         pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
 
         for name, _property, *data in pattern.findall(options):
             if name == self.name:
-                self.options[_property] = Option(*data)
+                self.options[_property] = Option(_property, *data)
 
     @classmethod
-    def from_string(cls, console: str) -> "Zpool":
+    def from_string(cls, console: str, options: str = "") -> "Zpool":  #  pylint: disable=too-many-locals
         if search := re.search(r"cannot open '(.*?)': no such pool", console):
             raise ValueError(f"There was no pool found with the name {search.group(1)}.")
 
@@ -503,6 +542,7 @@ class Zpool:
                         vdev = pool.new()
 
         zpool._sanitize()
+        zpool.add_option_string(options)
         return zpool
 
     @classmethod
@@ -515,7 +555,8 @@ class Zpool:
                 _vdev.append(*vdev.get("disks", []))
 
         for option in t.cast(list[_OptionHint], data.get("options", [])):
-            zpool.options[option.pop("property")] = Option(**option)
+            _option = Option.load(option)
+            zpool.options[_option.property] = _option
 
         zpool._sanitize()
         return zpool
@@ -532,7 +573,7 @@ class Zpool:
         for pool in self.names:
             cmd.extend(self.get_pool(pool).creation())
 
-        for _property, option in self.options.items():
-            cmd.extend(("-o", f"{_property}={option.value}"))
+        for option in self.options.values():
+            cmd.extend(option.create())
 
         return cmd

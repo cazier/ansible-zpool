@@ -1,0 +1,44 @@
+options:
+  - name: loading options
+    console: |
+      test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
+      	/tmp/01.raw	9.08T	141K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/02.raw	9.08T	142K	9.08T	-	-	0%	0.00%	-	ONLINE
+      	/tmp/03.raw	9.08T	137K	9.08T	-	-	0%	0.00%	-	ONLINE
+
+    options: |
+      test	ashift	12	local
+      test	comment	-	default
+      test	expandsize	-	-
+      test	freeing	0	-
+      test	fragmentation	0	-
+
+    list:
+      name: test
+      storage:
+        - type: stripe
+          disks:
+            - /tmp/01.raw
+            - /tmp/02.raw
+            - /tmp/03.raw
+      options:
+        - property: ashift
+          value: '12'
+          source: local
+        - property: comment
+          value: '-'
+          source: default
+        - property: expandsize
+          value: '-'
+          source: '-'
+        - property: freeing
+          value: '0'
+          source: '-'
+        - property: fragmentation
+          value: '0'
+          source: '-'
+
+    create: >-
+      test
+      /tmp/01.raw /tmp/02.raw /tmp/03.raw
+      -o ashift=12 -o comment=- -o expandsize=- -o freeing=0 -o fragmentation=0

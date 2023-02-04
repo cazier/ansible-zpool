@@ -5,12 +5,12 @@ import typing as t
 from ward import test, raises
 
 from tests.conftest import test_data
-from cazier.zfs.plugins.module_utils.utils import Vdev, Zpool, LogPool, CachePool, SparePool, StoragePool, _Pool
+from cazier.zfs.plugins.module_utils.utils import Vdev, Zpool, Option, LogPool, CachePool, SparePool, StoragePool, _Pool
 
-for item in test_data()("utils"):
+for _item in test_data()("utils"):
 
     @test("parsing zpool list: {name}")  # type: ignore[misc]
-    def _(console: str = item["console"], _list: dict[str, t.Any] = item["list"], name: str = item["name"]) -> None:
+    def _(console: str = _item["console"], _list: dict[str, t.Any] = _item["list"], name: str = _item["name"]) -> None:
         assert Zpool.from_string(console).dump() == _list
 
 
@@ -57,18 +57,29 @@ cannot open 'failure': no such pool
     assert "There was no pool found with the name failure." in str(expected.raised)
 
 
-for item in test_data()("utils"):
+for _item in test_data()("utils"):
 
     @test("parsing data dicts: {name}")  # type: ignore[misc]
-    def _(_list: dict[str, t.Any] = item["list"], name: str = item["name"]) -> None:
+    def _(_list: dict[str, t.Any] = _item["list"], name: str = _item["name"]) -> None:
         assert Zpool.from_dict(_list).dump() == _list
 
 
-for item in test_data()("utils"):
+for _item in test_data()("utils"):
 
     @test("zpool create command: {name}")  # type: ignore[misc]
-    def _(console: str = item["console"], create: str = item["create"], name: str = item["name"]) -> None:
+    def _(console: str = _item["console"], create: str = _item["create"], name: str = _item["name"]) -> None:
         assert " ".join(Zpool.from_string(console).create_command()) == create
+
+
+for _item in test_data()("options"):
+
+    @test("parsing zpool options: {name}")  # type: ignore[misc]
+    def _(item: dict[str, t.Any] = _item, name: str = _item["name"]) -> None:
+        zpool = Zpool.from_string(item["console"], item["options"])
+        assert zpool == Zpool.from_dict(zpool.dump())
+
+        assert zpool.dump() == item["list"]
+        assert " ".join(zpool.create_command()) == item["create"]
 
 
 @test("vdevs")  # type: ignore[misc]
@@ -384,3 +395,26 @@ test	27.2T	420K	27.2T	-	-	0%	0%	1.00x	ONLINE	-
 
     d.name = "d"
     assert c != d
+
+
+@test("zpools")  # type: ignore[misc]
+def _() -> None:
+    a = Option("ashift", "12")
+    b = Option("ashift", "")
+
+    assert a != b
+
+    b.value = "12"
+    assert a == b
+
+    b.source = "local"
+    assert a == b
+
+    assert a != {"options": False}
+    assert a != object()
+
+    c = Option.load({"ashift": "12"})
+    d = Option.load({"property": "ashift", "value": "12", "source": "-"})
+
+    assert a == c
+    assert c == d
