@@ -1,0 +1,59 @@
+filters:
+  - name: everything
+    frequency:
+      - frequent
+      - hourly
+      - daily
+      - weekly
+      - monthly
+
+    expectation:
+      com.sun:auto-snapshot:frequent: true
+      com.sun:auto-snapshot:hourly: true
+      com.sun:auto-snapshot:daily: true
+      com.sun:auto-snapshot:weekly: true
+      com.sun:auto-snapshot:monthly: true
+  - name: something
+    frequency:
+      - frequent
+      - weekly
+      - monthly
+
+    expectation:
+      com.sun:auto-snapshot:frequent: true
+      com.sun:auto-snapshot:hourly: false
+      com.sun:auto-snapshot:daily: false
+      com.sun:auto-snapshot:weekly: true
+      com.sun:auto-snapshot:monthly: true
+
+  - name: all
+    frequency:
+      - '@all'
+
+    expectation:
+      com.sun:auto-snapshot:frequent: true
+      com.sun:auto-snapshot:hourly: true
+      com.sun:auto-snapshot:daily: true
+      com.sun:auto-snapshot:weekly: true
+      com.sun:auto-snapshot:monthly: true
+
+  - name: none
+    frequency: []
+
+    expectation:
+      com.sun:auto-snapshot:frequent: false
+      com.sun:auto-snapshot:hourly: false
+      com.sun:auto-snapshot:daily: false
+      com.sun:auto-snapshot:weekly: false
+      com.sun:auto-snapshot:monthly: false
+
+  - name: invalid values
+    frequency:
+      - annually
+
+    expectation:
+      com.sun:auto-snapshot:frequent: false
+      com.sun:auto-snapshot:hourly: false
+      com.sun:auto-snapshot:daily: false
+      com.sun:auto-snapshot:weekly: false
+      com.sun:auto-snapshot:monthly: false
