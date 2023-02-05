@@ -71,12 +71,12 @@ for item in test_data():
 
     @test("integration: {name}", tags=["ansible"])  # type: ignore[misc]
     def _(sparse: p.Path = rootdir, ansible: p.Path = ansibledir, data: t.Any = item, name: str = item["name"]) -> None:
-        inputs = data["inputs"]
+        tasks = data["tasks"]
         result = data["result"]
-        options = data.get("options")
+        pool = data["pool_name"]
 
         playbook = ansible.joinpath("test_playbook.yaml")
-        playbook.write_text(yaml.dump(inputs).replace("<__PATH__>", str(sparse)), encoding="utf8")
+        playbook.write_text(yaml.dump(tasks).replace("<__PATH__>", str(sparse)), encoding="utf8")
 
         out = subprocess.run(
             ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local", "-vvv"],
@@ -92,14 +92,10 @@ for item in test_data():
                 assert out.stdout and msg in out.stdout.decode("utf8")
 
         else:
-            print("stdout")
-            print(out.stdout.decode("utf8"))
-            print("stderr")
-            print(out.stderr.decode("utf8"))
             assert out.returncode == 0
 
-        assert result["exists"] == _exists("test")
+        assert result["exists"] == _exists(pool)
 
-        if options:
+        if options := data.get("options"):
             for key, value in options.items():
-                assert _options("test")[key] == value
+                assert _options(pool)[key] == value

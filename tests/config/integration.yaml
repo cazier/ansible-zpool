@@ -1,13 +1,14 @@
 integration:
   - name: create
-    inputs:
+    pool_name: &name test
+    tasks:
       - name: zpool
         hosts: all
         tasks:
           - name: create
             become: true
             cazier.zfs.zpool:
-              name: test
+              name: *name
               zpool:
                 storage:
                   - type: raidz1
@@ -27,14 +28,15 @@ integration:
       exists: true
 
   - name: destroy unsuccessfully
-    inputs:
+    pool_name: &name test
+    tasks:
       - name: zpool
         hosts: all
         tasks:
           - name: destroy
             become: true
             cazier.zfs.zpool:
-              name: test
+              name: *name
               zpool:
                 storage:
                   - type: raidz1
@@ -55,14 +57,15 @@ integration:
       exists: true
 
   - name: destroy successfully
-    inputs:
+    pool_name: &name test
+    tasks:
       - name: zpool
         hosts: all
         tasks:
           - name: destroy
             become: true
             cazier.zfs.zpool:
-              name: test
+              name: *name
               zpool:
                 storage:
                   - type: raidz1
@@ -83,14 +86,15 @@ integration:
       exists: false
 
   - name: zpool with options
-    inputs:
+    pool_name: &name test
+    tasks:
       - name: zpool
         hosts: all
         tasks:
           - name: create
             become: true
             cazier.zfs.zpool:
-              name: test
+              name: *name
               zpool:
                 storage:
                   - type: raidz1
