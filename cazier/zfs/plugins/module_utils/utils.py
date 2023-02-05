@@ -116,7 +116,7 @@ class Vdev:
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, dict):
             try:
-                __o = Vdev.load(__o)
+                __o = Vdev.from_dict(__o)
 
             except:  # pylint: disable=bare-except
                 return False
@@ -183,7 +183,7 @@ class Vdev:
         return cmd
 
     @classmethod
-    def load(cls, data: _VdevHint) -> "Vdev":
+    def from_dict(cls, data: _VdevHint) -> "Vdev":
         return cls(type=data.get("type"), disks=data.get("disks", []))  # type: ignore[arg-type]
 
 
@@ -204,7 +204,7 @@ class _Pool:
             if not isinstance(vdev, Vdev):
                 raise TypeError(
                     f"A {self.__class__.__name__} cannot be initialized with non-Vdevs. "
-                    "Use .load() to create from a container."
+                    "Use .from_dict() to create from a container."
                 )
             self._check_redundancy(vdev)
 
@@ -214,13 +214,13 @@ class _Pool:
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, dict):
             try:
-                __o = self.load(__o)
+                __o = self.from_dict(__o)
 
             except:  # pylint: disable=bare-except
                 return False
 
         if isinstance(__o, (list, tuple)):
-            __o = self.load({self.name: list(__o)})
+            __o = self.from_dict({self.name: list(__o)})
 
         if not isinstance(__o, type(self)):
             return False
@@ -305,7 +305,7 @@ class _Pool:
         return cmd
 
     @classmethod
-    def load(cls, data: _PoolHint) -> _PoolsHint:
+    def from_dict(cls, data: _PoolHint) -> _PoolsHint:
         if len(keys := list(data.items())) > 1:
             raise TypeError(f"Could not create a {cls.__name__} from this input data: There were too many pools.")
 
@@ -314,7 +314,7 @@ class _Pool:
 
         [[_type, disks]] = keys
 
-        return _find_pool(_type)([Vdev.load(disk) for disk in disks])
+        return _find_pool(_type)([Vdev.from_dict(disk) for disk in disks])
 
 
 @dataclasses.dataclass(eq=False)
@@ -377,8 +377,19 @@ class Option:
     source: str = "-"
 
     @classmethod
-    def load(cls, data: _OptionHint) -> "Option":
-        if _property := data.get("property"):
+    def from_string(cls, console: str) -> dict[str, "Option"]:
+        pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
+
+        result: dict[str, Option] = {}
+
+        for _, _property, *data in pattern.findall(console):
+            result[_property] = Option(_property, *data)
+
+        return result
+
+    @classmethod
+    def from_dict(cls, data: _OptionHint) -> "Option":
+        if "property" in data.keys():
             option = cls(**data)
 
         else:
@@ -390,7 +401,7 @@ class Option:
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, dict):
             try:
-                __o = self.load(__o)
+                __o = self.from_dict(__o)
 
             except:  # pylint: disable=bare-except
                 return False
@@ -488,13 +499,6 @@ class Zpool:
 
         return data
 
-    def add_option_string(self, options: str) -> None:
-        pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
-
-        for name, _property, *data in pattern.findall(options):
-            if name == self.name:
-                self.options[_property] = Option(_property, *data)
-
     @classmethod
     def from_string(cls, console: str, options: str = "") -> "Zpool":  #  pylint: disable=too-many-locals
         if search := re.search(r"cannot open '(.*?)': no such pool", console):
@@ -542,7 +546,7 @@ class Zpool:
                         vdev = pool.new()
 
         zpool._sanitize()
-        zpool.add_option_string(options)
+        zpool.options = Option.from_string(options)
         return zpool
 
     @classmethod
@@ -555,7 +559,7 @@ class Zpool:
                 _vdev.append(*vdev.get("disks", []))
 
         for option in t.cast(list[_OptionHint], data.get("options", [])):
-            _option = Option.load(option)
+            _option = Option.from_dict(option)
             zpool.options[_option.property] = _option
 
         zpool._sanitize()

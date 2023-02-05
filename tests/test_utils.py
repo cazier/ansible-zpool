@@ -108,7 +108,7 @@ def _() -> None:
     assert a.dump() == a
     assert a != {"disks": 0}
 
-    assert a.load(a.dump()) == a
+    assert a.from_dict(a.dump()) == a
 
     assert b == ["drive0.raw", "drive1.raw"]
     assert b == {"drive0.raw", "drive1.raw"}
@@ -191,7 +191,7 @@ def _() -> None:
         {"disks": ["drive10.raw", "drive11.raw"], "type": "stripe"},
     )
 
-    assert storage.load(storage.dump()) == storage
+    assert storage.from_dict(storage.dump()) == storage
 
     assert storage != object()
 
@@ -207,7 +207,7 @@ def _() -> None:
         ],
     }
 
-    assert storage.load(storage.dump()) == storage
+    assert storage.from_dict(storage.dump()) == storage
     assert all(vdev.type is not None for vdev in storage.vdevs)
 
     assert storage.devices == {"drive0.raw", "drive1.raw", "drive10.raw", "drive11.raw", "drive20.raw"}
@@ -216,23 +216,23 @@ def _() -> None:
     assert log.dump() == {"logs": [{"disks": ["drive0.raw", "drive1.raw"], "type": "stripe"}]}
     assert log.creation() == ["log", "drive0.raw", "drive1.raw"]
 
-    assert log.load(log.dump()) == log
+    assert log.from_dict(log.dump()) == log
     assert all(vdev.type is not None for vdev in log.vdevs)
 
     with raises(TypeError) as expected:
         _Pool([{"disks": ["drive0.raw"]}])  # type: ignore[list-item]
-    assert "A _Pool cannot be initialized with non-Vdevs. Use .load() to create from a" in str(expected.raised)
+    assert "A _Pool cannot be initialized with non-Vdevs. Use .from_dict() to create from a" in str(expected.raised)
 
     with raises(TypeError) as expected:
-        _Pool.load({})
+        _Pool.from_dict({})
     assert "Could not create a _Pool from this input data: The input data has no pools." in str(expected.raised)
 
     with raises(TypeError) as expected:
-        StoragePool.load({"storage": [], "log": []})
+        StoragePool.from_dict({"storage": [], "log": []})
     assert "Could not create a StoragePool from this input data: There were too many pools." in str(expected.raised)
 
     with raises(AttributeError) as expected:  # type: ignore[assignment]
-        _Pool.load({"Invalid Pool Type": []})
+        _Pool.from_dict({"Invalid Pool Type": []})
     assert "Could not find the requested pool type in the module." in str(expected.raised)
 
 
@@ -254,13 +254,13 @@ def _() -> None:
         CachePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"], type="raidz1")])
     assert "Non-redundant pools (i.e., class: CachePool) cannot have a type argument." in str(expected.raised)
 
-    assert cache.load(cache.dump()) == cache
+    assert cache.from_dict(cache.dump()) == cache
     assert all(vdev.type is None for vdev in cache.vdevs)
 
     spare = SparePool(vdevs=[Vdev(["drive0.raw", "drive1.raw"])])
     assert spare.creation() == ["spare", "drive0.raw", "drive1.raw"]
 
-    assert spare.load(spare.dump()) == spare
+    assert spare.from_dict(spare.dump()) == spare
     assert all(vdev.type is None for vdev in spare.vdevs)
 
     with raises(ValueError) as expected:
@@ -410,11 +410,11 @@ def _() -> None:
     b.source = "local"
     assert a == b
 
-    assert a != {"options": False}
+    assert a != {"property": False}
     assert a != object()
 
-    c = Option.load({"ashift": "12"})
-    d = Option.load({"property": "ashift", "value": "12", "source": "-"})
+    c = Option.from_dict({"ashift": "12"})
+    d = Option.from_dict({"property": "ashift", "value": "12", "source": "-"})
 
     assert a == c
     assert c == d
