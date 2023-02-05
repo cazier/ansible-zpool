@@ -9,6 +9,8 @@ import subprocess
 import yaml
 from ward import Scope, test, fixture
 
+from cazier.zfs.plugins.module_utils.utils import Option
+
 
 @fixture(scope=Scope.Module)  # type: ignore[misc]
 def rootdir() -> t.Iterator[p.Path]:
@@ -56,18 +58,28 @@ def _exists(name: str) -> bool:
     return out.returncode == 0 and (out.stderr is None or "no such pool" not in out.stderr.decode(encoding="utf8"))
 
 
+def _options(name: str) -> dict[str, Option]:
+    out = subprocess.run(["zpool", "get", "-Hp", "-o", "'all'", "'all'", name], check=False)
+
+    if out.returncode != 0:
+        return {}
+
+    return Option.from_string(out.stdout.decode("utf8"))
+
+
 for item in test_data():
 
     @test("integration: {name}", tags=["ansible"])  # type: ignore[misc]
     def _(sparse: p.Path = rootdir, ansible: p.Path = ansibledir, data: t.Any = item, name: str = item["name"]) -> None:
         inputs = data["inputs"]
         result = data["result"]
+        options = data.get("options")
 
         playbook = ansible.joinpath("test_playbook.yaml")
         playbook.write_text(yaml.dump(inputs).replace("<__PATH__>", str(sparse)), encoding="utf8")
 
         out = subprocess.run(
-            ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local"],
+            ["ansible-playbook", str(playbook), "-l", "test_device", "-v", "-c", "local", "-vvv"],
             capture_output=True,
             check=False,
             cwd=ansible,
@@ -80,6 +92,14 @@ for item in test_data():
                 assert out.stdout and msg in out.stdout.decode("utf8")
 
         else:
+            print("stdout")
+            print(out.stdout.decode("utf8"))
+            print("stderr")
+            print(out.stderr.decode("utf8"))
             assert out.returncode == 0
 
         assert result["exists"] == _exists("test")
+
+        if options:
+            for key, value in options.items():
+                assert _options("test")[key] == value

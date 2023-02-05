@@ -81,3 +81,33 @@ integration:
     result:
       failure: false
       exists: false
+
+  - name: zpool with options
+    inputs:
+      - name: zpool
+        hosts: all
+        tasks:
+          - name: create
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/01.raw
+                      - <__PATH__>/02.raw
+                      - <__PATH__>/03.raw
+
+                  - type: raidz1
+                    disks:
+                      - <__PATH__>/04.raw
+                      - <__PATH__>/05.raw
+                      - <__PATH__>/06.raw
+                options: &options
+                  - ashift: '12'
+              state: present
+    result:
+      failure: false
+      exists: true
+      options: *options
