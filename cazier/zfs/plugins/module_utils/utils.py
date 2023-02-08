@@ -147,6 +147,9 @@ class Vdev:
 
         return set(self.disks).difference(other.disks)
 
+    def __rsub__(self, other: "Vdev") -> set[str]:
+        return other - self
+
     def difference(self, other: "Vdev") -> set[str]:
         return self - other
 
@@ -241,6 +244,9 @@ class _Pool:
             raise ValueError("Diffing of different pool types is not supported.")
 
         return set(self.vdevs).difference(other.vdevs)
+
+    def __rsub__(self, other: "_Pool") -> set[Vdev]:
+        return other - self
 
     def difference(self, other: "_Pool") -> set[Vdev]:
         return self - other
@@ -380,12 +386,7 @@ class Option:
     def from_string(cls, console: str) -> dict[str, "Option"]:
         pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
 
-        result: dict[str, Option] = {}
-
-        for _, _property, *data in pattern.findall(console):
-            result[_property] = Option(_property, *data)
-
-        return result
+        return {_property: cls(_property, *data) for _, _property, *data in pattern.findall(console)}
 
     @classmethod
     def from_dict(cls, data: _OptionHint) -> "Option":
