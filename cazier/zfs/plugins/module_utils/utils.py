@@ -491,11 +491,7 @@ class Zpool:
                 data[pool_type] = pool.dump()[pool_type]
 
         if self.options:
-            options: list[dict[str, str]] = []
-
-            for option in self.options.values():
-                options.append(option.dump())
-
+            options: list[dict[str, str]] = [option.dump() for option in self.options.values()]
             data["options"] = options
 
         return data

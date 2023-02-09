@@ -1379,6 +1379,21 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx"]
 test = ["argcomplete (>=2.0)", "pre-commit", "pytest", "pytest-mock"]
 
 [[package]]
+name = "types-paramiko"
+version = "3.0.0.2"
+description = "Typing stubs for paramiko"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-paramiko-3.0.0.2.tar.gz", hash = "sha256:9f582a3a96cd9df1ab0a21fb333a3c40f120ccf01aaab326daa0df3887376059"},
+    {file = "types_paramiko-3.0.0.2-py3-none-any.whl", hash = "sha256:5328f60d0f83ef90d8196c8b24c6c6124aebf1fa9ab3ccfd72cd3b623512ae61"},
+]
+
+[package.dependencies]
+cryptography = ">=37.0.0"
+
+[[package]]
 name = "types-pyyaml"
 version = "6.0.12.4"
 description = "Typing stubs for PyYAML"
@@ -1562,4 +1577,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "73679aeb3c41ab64e885fef4e3590d240d4803da61461a50fb91ae75443f5c1f"
+content-hash = "29aa0cb6967ec6338f010c62f2ede437a51c275a319ac484d3b582a1de732a77"
