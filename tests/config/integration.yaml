@@ -1,6 +1,78 @@
-integration:
+present/absent:
   - name: create
-    inputs:
+    playbook:
+      - name: zpool
+        hosts: all
+        tasks:
+          - &zpool
+            name: create
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - "/tmp/01.raw"
+                      - "/tmp/02.raw"
+                      - "/tmp/03.raw"
+
+              state: present
+    result:
+      failure: false
+      exists: true
+
+  - name: destroy unsuccessfully
+    playbook:
+      - name: zpool
+        hosts: all
+        tasks:
+          - *zpool
+          - name: destroy
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - "/tmp/01.raw"
+                      - "/tmp/02.raw"
+                      - "/tmp/03.raw"
+
+              state: absent
+    result:
+      failure: true
+      message: The zpool test exists, but cannot be destroyed without the `force` flag
+      exists: true
+
+  - name: destroy successfully
+    playbook:
+      - name: zpool
+        hosts: all
+        tasks:
+          - *zpool
+          - name: destroy
+            become: true
+            cazier.zfs.zpool:
+              name: test
+              zpool:
+                storage:
+                  - type: raidz1
+                    disks:
+                      - "/tmp/01.raw"
+                      - "/tmp/02.raw"
+                      - "/tmp/03.raw"
+
+              state: absent
+              force: true
+    result:
+      failure: false
+      exists: false
+
+options:
+  - name: zpool with options
+    playbook:
       - name: zpool
         hosts: all
         tasks:
@@ -12,72 +84,49 @@ integration:
                 storage:
                   - type: raidz1
                     disks:
-                      - <__PATH__>/01.raw
-                      - <__PATH__>/02.raw
-                      - <__PATH__>/03.raw
+                      - "/tmp/01.raw"
+                      - "/tmp/02.raw"
+                      - "/tmp/03.raw"
 
-                  - type: raidz1
-                    disks:
-                      - <__PATH__>/04.raw
-                      - <__PATH__>/05.raw
-                      - <__PATH__>/06.raw
+                options: &options
+                  - ashift: '12'
               state: present
     result:
       failure: false
       exists: true
+      options: *options
 
-  - name: destroy unsuccessfully
-    inputs:
+filters:
+  - name: snapshots
+    playbook:
       - name: zpool
         hosts: all
+        vars:
+          snapshots: &snapshots
+            - '@all'
         tasks:
-          - name: destroy
+          - *zpool
+          - name: Create filesystem(s)
             become: true
-            cazier.zfs.zpool:
-              name: test
-              zpool:
-                storage:
-                  - type: raidz1
-                    disks:
-                      - <__PATH__>/01.raw
-                      - <__PATH__>/02.raw
-                      - <__PATH__>/03.raw
-
-                  - type: raidz1
-                    disks:
-                      - <__PATH__>/04.raw
-                      - <__PATH__>/05.raw
-                      - <__PATH__>/06.raw
-              state: absent
-    result:
-      failure: true
-      message: The zpool test exists, but cannot be destroyed without the `force` flag
-      exists: true
-
-  - name: destroy successfully
-    inputs:
-      - name: zpool
-        hosts: all
-        tasks:
-          - name: destroy
+            community.general.zfs:
+              name: test/test
+              state: present
+          - name: Enable zpool snapshot
             become: true
-            cazier.zfs.zpool:
+            community.general.zfs:
               name: test
-              zpool:
-                storage:
-                  - type: raidz1
-                    disks:
-                      - <__PATH__>/01.raw
-                      - <__PATH__>/02.raw
-                      - <__PATH__>/03.raw
+              state: present
+              extra_zfs_properties:
+                com.sun:auto-snapshot: true
+          - name: Configure snapshots on filesystems
+            become: true
+            community.general.zfs:
+              name: test/test
+              state: present
+              extra_zfs_properties: "{{ snapshots | cazier.zfs.snapshot }}"
 
-                  - type: raidz1
-                    disks:
-                      - <__PATH__>/04.raw
-                      - <__PATH__>/05.raw
-                      - <__PATH__>/06.raw
-              state: absent
-              force: true
     result:
       failure: false
-      exists: false
+      exists: true
+      filters:
+        snapshots: *snapshots

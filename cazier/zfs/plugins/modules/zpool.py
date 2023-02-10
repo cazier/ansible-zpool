@@ -125,6 +125,7 @@ def main() -> None:
                     logs=dict(type="list", required=False, default=[]),
                     cache=dict(type="list", required=False, default=[]),
                     spare=dict(type="list", required=False, default=[]),
+                    options=dict(type="list", required=False, default=[]),
                 ),
             ),
             state=dict(type="str", default="present", choices=["absent", "present"]),

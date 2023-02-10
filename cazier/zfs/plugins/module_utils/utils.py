@@ -5,7 +5,8 @@ import dataclasses
 
 _VdevHint = dict[str, str | list[str]]
 _PoolHint = dict[str, list[_VdevHint]]
-_ZpoolHint = dict[str, str | list[_VdevHint]]
+_OptionHint = dict[str, str]
+_ZpoolHint = dict[str, str | list[_VdevHint] | list[_OptionHint]]
 
 _PoolsHint = t.Union["StoragePool", "LogPool", "CachePool", "SparePool"]
 
@@ -115,7 +116,7 @@ class Vdev:
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, dict):
             try:
-                __o = Vdev.load(__o)
+                __o = Vdev.from_dict(__o)
 
             except:  # pylint: disable=bare-except
                 return False
@@ -145,6 +146,9 @@ class Vdev:
             raise ValueError("Diffing of vdevs with different types is not supported.")
 
         return set(self.disks).difference(other.disks)
+
+    def __rsub__(self, other: "Vdev") -> set[str]:
+        return other - self
 
     def difference(self, other: "Vdev") -> set[str]:
         return self - other
@@ -182,7 +186,7 @@ class Vdev:
         return cmd
 
     @classmethod
-    def load(cls, data: _VdevHint) -> "Vdev":
+    def from_dict(cls, data: _VdevHint) -> "Vdev":
         return cls(type=data.get("type"), disks=data.get("disks", []))  # type: ignore[arg-type]
 
 
@@ -203,7 +207,7 @@ class _Pool:
             if not isinstance(vdev, Vdev):
                 raise TypeError(
                     f"A {self.__class__.__name__} cannot be initialized with non-Vdevs. "
-                    "Use .load() to create from a container."
+                    "Use .from_dict() to create from a container."
                 )
             self._check_redundancy(vdev)
 
@@ -213,13 +217,13 @@ class _Pool:
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, dict):
             try:
-                __o = self.load(__o)
+                __o = self.from_dict(__o)
 
             except:  # pylint: disable=bare-except
                 return False
 
         if isinstance(__o, (list, tuple)):
-            __o = self.load({self.name: list(__o)})
+            __o = self.from_dict({self.name: list(__o)})
 
         if not isinstance(__o, type(self)):
             return False
@@ -240,6 +244,9 @@ class _Pool:
             raise ValueError("Diffing of different pool types is not supported.")
 
         return set(self.vdevs).difference(other.vdevs)
+
+    def __rsub__(self, other: "_Pool") -> set[Vdev]:
+        return other - self
 
     def difference(self, other: "_Pool") -> set[Vdev]:
         return self - other
@@ -304,7 +311,7 @@ class _Pool:
         return cmd
 
     @classmethod
-    def load(cls, data: _PoolHint) -> _PoolsHint:
+    def from_dict(cls, data: _PoolHint) -> _PoolsHint:
         if len(keys := list(data.items())) > 1:
             raise TypeError(f"Could not create a {cls.__name__} from this input data: There were too many pools.")
 
@@ -313,7 +320,7 @@ class _Pool:
 
         [[_type, disks]] = keys
 
-        return _find_pool(_type)([Vdev.load(disk) for disk in disks])
+        return _find_pool(_type)([Vdev.from_dict(disk) for disk in disks])
 
 
 @dataclasses.dataclass(eq=False)
@@ -370,12 +377,56 @@ def _find_pool(_type: str) -> type[_PoolsHint]:
 
 
 @dataclasses.dataclass
+class Option:
+    property: str
+    value: str
+    source: str = "-"
+
+    @classmethod
+    def from_string(cls, console: str) -> dict[str, "Option"]:
+        pattern = re.compile(r"(?P<name>\S+)\t(?P<property>\S+)\t(?P<value>\S+)\t(?P<source>\S+)")
+
+        return {_property: cls(_property, *data) for _, _property, *data in pattern.findall(console)}
+
+    @classmethod
+    def from_dict(cls, data: _OptionHint) -> "Option":
+        if "property" in data.keys():
+            option = cls(**data)
+
+        else:
+            [(_property, value)] = data.items()
+            option = cls(_property, value)
+
+        return option
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, dict):
+            try:
+                __o = self.from_dict(__o)
+
+            except:  # pylint: disable=bare-except
+                return False
+
+        if not isinstance(__o, type(self)):
+            return False
+
+        return self.property == __o.property and self.value == __o.value
+
+    def dump(self) -> _OptionHint:
+        return dataclasses.asdict(self)
+
+    def create(self) -> list[str]:
+        return ["-o", f"{self.property}={self.value}"]
+
+
+@dataclasses.dataclass
 class Zpool:
-    name: str = dataclasses.field(metadata={"dump": False})
+    name: str
     storage: StoragePool = dataclasses.field(default_factory=StoragePool)
     logs: LogPool = dataclasses.field(default_factory=LogPool)
     cache: CachePool = dataclasses.field(default_factory=CachePool)
     spare: SparePool = dataclasses.field(default_factory=SparePool)
+    options: dict[str, Option] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self._sanitize()
@@ -430,7 +481,7 @@ class Zpool:
 
     @property
     def names(self) -> t.Iterator[str]:
-        yield from (field.name for field in dataclasses.fields(self) if field.metadata.get("dump", True))
+        yield from (field.name for field in dataclasses.fields(self) if issubclass(field.type, _Pool))
 
     def dump(self) -> _ZpoolHint:
         data: _ZpoolHint = {"name": self.name}
@@ -439,10 +490,14 @@ class Zpool:
             if pool := self.get_pool(pool_type):
                 data[pool_type] = pool.dump()[pool_type]
 
+        if self.options:
+            options: list[dict[str, str]] = [option.dump() for option in self.options.values()]
+            data["options"] = options
+
         return data
 
     @classmethod
-    def from_string(cls, console: str) -> "Zpool":
+    def from_string(cls, console: str, options: str = "") -> "Zpool":  #  pylint: disable=too-many-locals
         if search := re.search(r"cannot open '(.*?)': no such pool", console):
             raise ValueError(f"There was no pool found with the name {search.group(1)}.")
 
@@ -488,6 +543,7 @@ class Zpool:
                         vdev = pool.new()
 
         zpool._sanitize()
+        zpool.options = Option.from_string(options)
         return zpool
 
     @classmethod
@@ -498,6 +554,10 @@ class Zpool:
             for vdev in t.cast(list[_VdevHint], data.get(key, {})):
                 _vdev = zpool.get_pool(key).new(t.cast(t.Optional[str], vdev.get("type")))
                 _vdev.append(*vdev.get("disks", []))
+
+        for option in t.cast(list[_OptionHint], data.get("options", [])):
+            _option = Option.from_dict(option)
+            zpool.options[_option.property] = _option
 
         zpool._sanitize()
         return zpool
@@ -513,5 +573,8 @@ class Zpool:
 
         for pool in self.names:
             cmd.extend(self.get_pool(pool).creation())
+
+        for option in self.options.values():
+            cmd.extend(option.create())
 
         return cmd

@@ -10,7 +10,13 @@
             "request": "launch",
             "module": "ward",
             "justMyCode": true,
-            "args": ["test"],
+            "args": [
+                "test",
+                "-p",
+                "tests",
+                "--tags",
+                "not ansible"
+            ],
         }
     ]
 }
