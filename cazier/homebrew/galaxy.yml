@@ -1,0 +1,22 @@
+namespace: cazier
+name: homebrew
+version: 1.0.0
+
+authors:
+- Brendan Cazier <520246+cazier@users.noreply.github.com>
+
+readme: README.md
+description: Helper module for determining if homebrew is installed on the machine.
+license_file: 'LICENSE'
+
+repository: https://github.com/cazier/ansible-zpool
+documentation: https://github.com/cazier/ansible-zpool
+homepage: https://github.com/cazier/ansible-zpool
+issues: http://example.com/issue/tracker
+
+tags:
+  - brew
+  - homebrew
+  - linuxbrew
+
+build_ignore: []
