@@ -10,7 +10,7 @@ def main() -> None:
     ansible_facts: dict[str, str | bool] = {"changed": False}
 
     path = module.get_bin_path(
-        "zpool",
+        "brew",
         opt_dirs=[
             "/opt/homebrew/bin",  # ARM macOS
             "/usr/local/bin",  # Intel macOS
