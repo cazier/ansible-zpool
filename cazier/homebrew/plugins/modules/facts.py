@@ -30,7 +30,7 @@ def main() -> None:
     if rc != 0:
         module.fail_json(msg=f"An error occurred executing the brew binary: `{stderr}`")
 
-    match = re.match(r"^Homebrew (?P<homebrew_version>.*)\n.*", stdout)
+    match = re.match(r"^Homebrew (?P<homebrew_version>.*?\d+) .*?\n.*", stdout)
 
     if not match:
         module.fail_json(msg=f"Could not determine the brew version. Output: `{stdout}")
