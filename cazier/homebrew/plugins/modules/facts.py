@@ -7,7 +7,7 @@ from ansible.module_utils.basic import AnsibleModule  # type: ignore[import]
 def main() -> None:
     module = AnsibleModule(argument_spec={}, supports_check_mode=True)
 
-    ansible_facts: dict[str, str | bool] = {"changed": False}
+    facts: dict[str, str | bool] = {"changed": False}
 
     path = module.get_bin_path(
         "brew",
@@ -19,11 +19,11 @@ def main() -> None:
     )
 
     if not path:
-        ansible_facts["homebrew_installed"] = False
-        module.exit_json(**ansible_facts)
+        facts["homebrew_installed"] = False
+        module.exit_json(ansible_facts=facts, changed=False)
 
-    ansible_facts["homebrew_installed"] = True
-    ansible_facts["homebrew_prefix"] = str(pathlib.Path(path).parents[1])
+    facts["homebrew_installed"] = True
+    facts["homebrew_prefix"] = str(pathlib.Path(path).parents[1])
 
     rc, stdout, stderr = module.run_command([path, "--version"])  # pylint: disable=invalid-name
 
@@ -36,9 +36,9 @@ def main() -> None:
         module.fail_json(msg=f"Could not determine the brew version. Output: `{stdout}")
         return
 
-    ansible_facts.update(match.groupdict())
+    facts.update(match.groupdict())
 
-    module.exit_json(**ansible_facts)
+    module.exit_json(ansible_facts=facts, changed=False)
 
 
 if __name__ == "__main__":
