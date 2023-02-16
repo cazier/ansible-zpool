@@ -7,7 +7,7 @@ from ansible.module_utils.basic import AnsibleModule  # type: ignore[import]
 def main() -> None:
     module = AnsibleModule(argument_spec={}, supports_check_mode=True)
 
-    facts: dict[str, str | bool] = {"changed": False}
+    facts: dict[str, str | bool] = {}
 
     path = module.get_bin_path(
         "brew",
