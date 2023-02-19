@@ -1,12 +1,12 @@
 namespace: cazier
-name: homebrew
+name: utils
 version: 1.0.0
 
 authors:
 - Brendan Cazier <520246+cazier@users.noreply.github.com>
 
 readme: README.md
-description: Helper module for determining if homebrew is installed on the machine.
+description: Helper module with some added facts because I don't really wanna use facts.d
 license_file: 'LICENSE'
 
 repository: https://github.com/cazier/ansible-zpool
@@ -18,5 +18,6 @@ tags:
   - brew
   - homebrew
   - linuxbrew
+  - ohmyzsh
 
 build_ignore: []
