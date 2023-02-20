@@ -57,6 +57,8 @@ def shells() -> dict[str, bool | dict[str, dict[str, str]]]:
 
         facts["user_shells"][struct.pw_name] = {
             "home": struct.pw_dir,
+            "uid": str(struct.pw_uid),
+            "gid": str(struct.pw_gid),
             "shell": struct.pw_shell,
             "profile": SHELL_PROFILES.get(struct.pw_shell.split("/")[-1], ""),
         }
