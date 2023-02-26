@@ -8,7 +8,6 @@ from cazier.zfs.plugins.module_utils.utils import _match, _pairs, _get_disk, _ge
 
 @test("utils: _pairs")  # type: ignore[misc]
 def _() -> None:
-
     for i, (j, k) in enumerate(_pairs(map(str, range(10)))):
         assert str(i * 2) == str(j)
         assert str((i * 2) + 1) == str(k)
